@@ -1,0 +1,10 @@
+apiVersion: v2
+name: reforge
+description: Repository automation with bundled identity, database, and runner
+type: application
+version: 0.1.0-dev.1
+appVersion: "0.1.26"
+kubeVersion: ">=1.28.0-0"
+home: https://github.com/reforgeapp/reforge
+sources:
+  - https://github.com/reforgeapp/reforge-helm

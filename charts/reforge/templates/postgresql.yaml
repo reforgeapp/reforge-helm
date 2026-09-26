@@ -1,0 +1,153 @@
+{{- if .Values.postgresql.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "reforge.fullname" . }}-postgresql
+  labels:
+    {{- include "reforge.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with .Values.postgresql.persistence.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.postgresql.persistence.size }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "reforge.fullname" . }}-postgresql
+  labels:
+    {{- include "reforge.labels" . | nindent 4 }}
+spec:
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: postgresql
+  ports:
+    - name: postgresql
+      port: 5432
+      targetPort: postgresql
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "reforge.fullname" . }}-postgresql
+  labels:
+    {{- include "reforge.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: postgresql
+  template:
+    metadata:
+      labels:
+        {{- include "reforge.labels" . | nindent 8 }}
+        app.kubernetes.io/component: postgresql
+    spec:
+      serviceAccountName: {{ include "reforge.fullname" . }}
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 120
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70
+        runAsGroup: 70
+        fsGroup: 70
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: postgresql
+          image: {{ .Values.postgresql.image | quote }}
+          {{- if .Values.postgresql.tls.existingSecret }}
+          args: [-c, ssl=on, -c, ssl_cert_file=/tls/tls.crt, -c, ssl_key_file=/tls/tls.key, -c, hba_file=/configuration/pg_hba.conf]
+          {{- end }}
+          env:
+            - name: POSTGRES_DB
+              value: reforge
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "reforge.databaseSecret" . }}
+                  key: admin-password
+            - name: PGDATA
+              value: /var/lib/postgresql/18/docker
+            - name: POSTGRES_INITDB_ARGS
+              value: --auth-host=scram-sha-256
+          ports:
+            - name: postgresql
+              containerPort: 5432
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql
+            {{- if .Values.postgresql.tls.existingSecret }}
+            - name: tls
+              mountPath: /tls
+              readOnly: true
+            - name: configuration
+              mountPath: /configuration
+              readOnly: true
+            {{- end }}
+          startupProbe:
+            exec:
+              command: [pg_isready, -U, postgres, -d, reforge]
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            exec:
+              command: [pg_isready, -U, postgres, -d, reforge]
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            exec:
+              command: [pg_isready, -U, postgres, -d, reforge]
+            periodSeconds: 15
+            timeoutSeconds: 5
+          resources:
+            {{- toYaml .Values.postgresql.resources | nindent 12 }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "reforge.fullname" . }}-postgresql
+        {{- if .Values.postgresql.tls.existingSecret }}
+        - name: tls
+          secret:
+            secretName: {{ .Values.postgresql.tls.existingSecret }}
+            defaultMode: 0440
+        - name: configuration
+          configMap:
+            name: {{ include "reforge.fullname" . }}-postgresql-tls
+        {{- end }}
+{{- if .Values.postgresql.tls.existingSecret }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "reforge.fullname" . }}-postgresql-tls
+data:
+  pg_hba.conf: |
+    local all all trust
+    hostssl all all 0.0.0.0/0 scram-sha-256
+    hostssl all all ::/0 scram-sha-256
+{{- end }}
+{{- end }}

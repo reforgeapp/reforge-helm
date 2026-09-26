@@ -1,0 +1,20 @@
+publicURL: https://app.reforgeapp.dev
+postgresql:
+  persistence:
+    storageClass: px-pool-xfs
+control:
+  artifacts:
+    storageClass: px-pool-xfs
+authentik:
+  publicURL: https://auth.reforgeapp.dev
+  bootstrapEmail: admin@reforgeapp.dev
+  ingress:
+    className: cloudflare-tunnel
+    annotations:
+      cert-manager.io/cluster-issuer: le-dns-issuer
+    tlsSecretName: reforge-authentik-tls
+ingress:
+  className: cloudflare-tunnel
+  annotations:
+    cert-manager.io/cluster-issuer: le-dns-issuer
+  tlsSecretName: reforge-app-tls

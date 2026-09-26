@@ -1,0 +1,119 @@
+nameOverride: ""
+fullnameOverride: ""
+publicURL: https://reforge.example.com
+image:
+  repository: ghcr.io/reforgeapp/reforge
+  tag: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+secrets:
+  existingSecret: ""
+  bootstrap:
+    enabled: true
+    ttlHours: 24
+provisioning:
+  image: python:3.14-slim@sha256:caaf356f40667c496d405780745b9ac25771c189a51dfcc42430d531ea09f8a2
+postgresql:
+  enabled: true
+  image: postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+  existingSecret: ""
+  persistence:
+    size: 20Gi
+    storageClass: ""
+  tls:
+    existingSecret: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 2Gi
+externalDatabase:
+  host: ""
+  port: 5432
+  name: reforge
+  runtimeUser: reforge_runtime
+  migratorUser: reforge_migrator
+  sslMode: verify-full
+  caSecret: ""
+authentik:
+  enabled: true
+  image: ghcr.io/goauthentik/server:2026.8.3
+  publicURL: https://auth.example.com
+  existingSecret: ""
+  bootstrapEmail: admin@example.com
+  database:
+    host: ""
+    port: 5432
+    name: authentik
+    user: authentik
+    sslMode: require
+    caSecret: ""
+  ingress:
+    enabled: true
+    className: ""
+    annotations: {}
+    tlsSecretName: ""
+  serverResources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      memory: 1Gi
+  workerResources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      memory: 1Gi
+oidc:
+  issuer: ""
+  clientID: reforge
+  existingSecret: ""
+runner:
+  enabled: true
+  image:
+    repository: ghcr.io/reforgeapp/reforge-runner
+    tag: ""
+  slots: 1
+  runtimeClassName: ""
+  extraArgs: []
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      memory: 8Gi
+  stateSizeLimit: 8Gi
+  cacheSizeLimit: 4Gi
+control:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+  artifacts:
+    size: 10Gi
+    storageClass: ""
+docs:
+  enabled: true
+  image:
+    repository: ghcr.io/reforgeapp/reforge-docs
+    tag: ""
+  resources:
+    requests:
+      cpu: 25m
+      memory: 32Mi
+    limits:
+      memory: 128Mi
+ingress:
+  enabled: true
+  className: ""
+  annotations: {}
+  tlsSecretName: ""
+networkPolicy:
+  enabled: true
+nodeSelector:
+  kubernetes.io/arch: amd64
+tolerations: []

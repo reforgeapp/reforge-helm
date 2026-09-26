@@ -1,0 +1,43 @@
+{{- if .Values.ingress.enabled }}
+{{- $host := regexReplaceAll ":[0-9]+$" (urlParse .Values.publicURL).host "" }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "reforge.fullname" . }}
+  labels:
+    {{- include "reforge.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.ingress.tlsSecretName }}
+  tls:
+    - hosts:
+        - {{ $host | quote }}
+      secretName: {{ . | quote }}
+  {{- end }}
+  rules:
+    - host: {{ $host | quote }}
+      http:
+        paths:
+          {{- if .Values.docs.enabled }}
+          - path: /docs
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "reforge.fullname" . }}-docs
+                port:
+                  name: http
+          {{- end }}
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "reforge.fullname" . }}-control
+                port:
+                  name: http
+{{- end }}

@@ -1,0 +1,288 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "reforge.fullname" . }}-artifacts
+  labels:
+    {{- include "reforge.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with .Values.control.artifacts.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.control.artifacts.size }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "reforge.fullname" . }}-control
+  labels:
+    {{- include "reforge.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: control
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/config.yaml") . | sha256sum }}
+      labels:
+        {{- include "reforge.labels" . | nindent 8 }}
+        app.kubernetes.io/component: control
+    spec:
+      serviceAccountName: {{ include "reforge.fullname" . }}
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if and .Values.runner.enabled .Values.runner.runtimeClassName }}
+      runtimeClassName: {{ .Values.runner.runtimeClassName | quote }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        {{- include "reforge.databaseInit" . | nindent 8 }}
+        {{- if .Values.runner.enabled }}
+        - name: builtin-init
+          image: {{ include "reforge.runnerImage" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: [/app/reforge-runner]
+          args: [builtin-init, --dir, /builtin]
+          securityContext:
+            runAsUser: 10002
+            {{- include "reforge.securityContext" . | nindent 12 }}
+          volumeMounts:
+            - name: builtin
+              mountPath: /builtin
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+        {{- else }}
+        - name: recipe-catalog
+          image: {{ include "reforge.runnerImage" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: [/bin/sh, -ec]
+          args:
+            - |
+              umask 027
+              go_digest="$(/app/reforge-runner image-digest --path /app/images/go)"
+              javascript_digest="$(/app/reforge-runner image-digest --path /app/images/javascript)"
+              python_digest="$(/app/reforge-runner image-digest --path /app/images/python)"
+              printf '{"go":"%s","javascript":"%s","python":"%s"}\n' "$go_digest" "$javascript_digest" "$python_digest" > /builtin/repair-images.json
+          securityContext:
+            runAsUser: 10002
+            {{- include "reforge.securityContext" . | nindent 12 }}
+          volumeMounts:
+            - name: builtin
+              mountPath: /builtin
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+        {{- end }}
+      containers:
+        - name: control
+          image: {{ include "reforge.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: [/bin/sh, -ec]
+          args:
+            - |
+              . /database/runtime.env
+              export REFORGE_DATABASE_URL
+              {{- if not .Values.runner.enabled }}
+              REFORGE_REPAIR_IMAGES="$(cat /builtin/repair-images.json)"
+              export REFORGE_REPAIR_IMAGES
+              {{- end }}
+              exec /app/reforge
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: {{ include "reforge.fullname" . }}-config
+          env:
+            - name: REFORGE_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "reforge.appSecret" . }}
+                  key: encryption-key
+            - name: REFORGE_OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "reforge.oidcSecret" . }}
+                  key: client-secret
+            {{- if .Values.secrets.bootstrap.enabled }}
+            - name: REFORGE_BOOTSTRAP_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "reforge.appSecret" . }}
+                  key: bootstrap-token
+            - name: REFORGE_BOOTSTRAP_EXPIRES_AT
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "reforge.appSecret" . }}
+                  key: bootstrap-expires-at
+            {{- end }}
+            {{- if .Values.runner.enabled }}
+            - name: REFORGE_BUILTIN_RUNNER_DIR
+              value: /builtin
+            {{- end }}
+          securityContext:
+            {{- include "reforge.securityContext" . | nindent 12 }}
+          volumeMounts:
+            - name: artifacts
+              mountPath: /app/var/artifacts
+            - name: control-tmp
+              mountPath: /tmp
+            - name: database
+              mountPath: /database
+              readOnly: true
+            - name: builtin
+              mountPath: /builtin
+              readOnly: true
+            {{- if include "reforge.databaseCASecret" . }}
+            - name: database-ca
+              mountPath: /database-ca
+              readOnly: true
+            {{- end }}
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 15
+            timeoutSeconds: 5
+          resources:
+            {{- toYaml .Values.control.resources | nindent 12 }}
+        {{- if .Values.runner.enabled }}
+        - name: runner
+          image: {{ include "reforge.runnerImage" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: [/app/reforge-runner]
+          args:
+            - builtin
+            - --endpoint
+            - http://127.0.0.1:8080
+            - --dir
+            - /builtin
+            - --state
+            - /var/lib/reforge-runner/data
+            - --slots
+            - {{ .Values.runner.slots | quote }}
+            {{- with .Values.runner.extraArgs }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          env:
+            - name: REFORGE_PUBLIC_URL
+              value: {{ .Values.publicURL | quote }}
+          securityContext:
+            runAsUser: 10002
+            {{- include "reforge.securityContext" . | nindent 12 }}
+          volumeMounts:
+            - name: builtin
+              mountPath: /builtin
+              readOnly: true
+            - name: runner-state
+              mountPath: /var/lib/reforge-runner
+            - name: runner-cache
+              mountPath: /var/cache/reforge-deps
+            - name: runner-tmp
+              mountPath: /tmp
+          resources:
+            {{- toYaml .Values.runner.resources | nindent 12 }}
+        {{- end }}
+      volumes:
+        - name: artifacts
+          persistentVolumeClaim:
+            claimName: {{ include "reforge.fullname" . }}-artifacts
+        - name: control-tmp
+          emptyDir:
+            sizeLimit: 256Mi
+        - name: database
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi
+        - name: migration
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi
+        - name: database-scripts
+          configMap:
+            name: {{ include "reforge.fullname" . }}-database-scripts
+        {{- if include "reforge.databaseCASecret" . }}
+        - name: database-ca
+          secret:
+            secretName: {{ include "reforge.databaseCASecret" . }}
+            items:
+              - key: ca.crt
+                path: ca.crt
+        {{- end }}
+        - name: builtin
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi
+        {{- if .Values.runner.enabled }}
+        - name: runner-state
+          emptyDir:
+            sizeLimit: {{ .Values.runner.stateSizeLimit }}
+        - name: runner-cache
+          emptyDir:
+            sizeLimit: {{ .Values.runner.cacheSizeLimit }}
+        - name: runner-tmp
+          emptyDir:
+            sizeLimit: 1Gi
+        {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "reforge.fullname" . }}-control
+  labels:
+    {{- include "reforge.labels" . | nindent 4 }}
+spec:
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: control
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

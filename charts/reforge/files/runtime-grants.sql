@@ -1,0 +1,7 @@
+GRANT USAGE ON SCHEMA public TO reforge_runtime;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO reforge_runtime;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO reforge_runtime;
+ALTER DEFAULT PRIVILEGES FOR ROLE reforge_migrator IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO reforge_runtime;
+ALTER DEFAULT PRIVILEGES FOR ROLE reforge_migrator IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO reforge_runtime;
+REVOKE ALL ON schema_migrations FROM reforge_runtime;
+REVOKE UPDATE, DELETE ON audit_events FROM reforge_runtime;

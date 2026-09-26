@@ -1,0 +1,155 @@
+{{- $secrets := list -}}
+{{- if not .Values.secrets.existingSecret -}}
+{{- $secrets = append $secrets (dict "name" (include "reforge.appSecret" .) "kind" "app") -}}
+{{- end -}}
+{{- if and .Values.postgresql.enabled (not .Values.postgresql.existingSecret) -}}
+{{- $secrets = append $secrets (dict "name" (include "reforge.databaseSecret" .) "kind" "database") -}}
+{{- end -}}
+{{- if and .Values.authentik.enabled (not .Values.authentik.existingSecret) -}}
+{{- $secrets = append $secrets (dict "name" (include "reforge.authentikSecret" .) "kind" "authentik") -}}
+{{- end -}}
+{{- if $secrets }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "reforge.fullname" . }}-provision
+  labels:
+    {{- include "reforge.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-30"
+    helm.sh/hook-delete-policy: before-hook-creation
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "reforge.fullname" . }}-provision
+  labels:
+    {{- include "reforge.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-30"
+    helm.sh/hook-delete-policy: before-hook-creation
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames:
+      {{- range $secrets }}
+      - {{ .name | quote }}
+      {{- end }}
+    verbs: [get]
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "reforge.fullname" . }}-provision
+  labels:
+    {{- include "reforge.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-30"
+    helm.sh/hook-delete-policy: before-hook-creation
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "reforge.fullname" . }}-provision
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "reforge.fullname" . }}-provision
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "reforge.fullname" . }}-provision
+  labels:
+    {{- include "reforge.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-30"
+    helm.sh/hook-delete-policy: before-hook-creation
+data:
+  config.json: {{ dict "namespace" .Release.Namespace "release" .Release.Name "bootstrapTTLHours" .Values.secrets.bootstrap.ttlHours "secrets" $secrets | toJson | quote }}
+  provision-secrets.py: |
+    {{- .Files.Get "files/provision-secrets.py" | nindent 4 }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "reforge.fullname" . }}-provision
+  labels:
+    {{- include "reforge.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-20"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 180
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: reforge-provision
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "reforge.fullname" . }}-provision
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: provision
+          image: {{ .Values.provisioning.image | quote }}
+          command: [python, -I, /provisioning/provision-secrets.py]
+          securityContext:
+            {{- include "reforge.securityContext" . | nindent 12 }}
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+          volumeMounts:
+            - name: provisioning
+              mountPath: /provisioning
+              readOnly: true
+            - name: kubernetes-api
+              mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+              readOnly: true
+      volumes:
+        - name: provisioning
+          configMap:
+            name: {{ include "reforge.fullname" . }}-provision
+        - name: kubernetes-api
+          projected:
+            defaultMode: 0444
+            sources:
+              - serviceAccountToken:
+                  path: token
+                  expirationSeconds: 3600
+              - configMap:
+                  name: kube-root-ca.crt
+                  items:
+                    - key: ca.crt
+                      path: ca.crt
+{{- end }}

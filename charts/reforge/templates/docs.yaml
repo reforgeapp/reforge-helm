@@ -1,0 +1,88 @@
+{{- if .Values.docs.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "reforge.fullname" . }}-docs
+  labels:
+    {{- include "reforge.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: docs
+  template:
+    metadata:
+      labels:
+        {{- include "reforge.labels" . | nindent 8 }}
+        app.kubernetes.io/component: docs
+    spec:
+      serviceAccountName: {{ include "reforge.fullname" . }}
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        fsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: docs
+          image: {{ printf "%s:%s" .Values.docs.image.repository (default .Chart.AppVersion .Values.docs.image.tag) | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: DOCS_VERSION
+              value: {{ default .Chart.AppVersion .Values.docs.image.tag | quote }}
+          ports:
+            - name: http
+              containerPort: 8080
+          securityContext:
+            {{- include "reforge.securityContext" . | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          readinessProbe:
+            httpGet:
+              path: /docs/
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /docs/
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          resources:
+            {{- toYaml .Values.docs.resources | nindent 12 }}
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "reforge.fullname" . }}-docs
+  labels:
+    {{- include "reforge.labels" . | nindent 4 }}
+spec:
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: docs
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+{{- end }}

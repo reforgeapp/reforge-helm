@@ -1,0 +1,8 @@
+Reforge Helm chart
+
+files/roles.sql and files/runtime-grants.sql are copied unchanged from
+https://github.com/reforgeapp/reforge at da5e0dc71195f1f0d4de2c1957f9aa5f570d9177.
+Reforge is licensed under Apache-2.0; see LICENSE.
+
+The chart references separately distributed Authentik, PostgreSQL, Python,
+and Reforge container images. Their licenses and notices remain with those images.

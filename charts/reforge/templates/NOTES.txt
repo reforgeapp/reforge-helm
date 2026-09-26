@@ -1,0 +1,10 @@
+Reforge: {{ .Values.publicURL }}
+{{ if .Values.authentik.enabled }}Identity: {{ .Values.authentik.publicURL }} (initial user: akadmin)
+Authentik credentials: Secret {{ include "reforge.authentikSecret" . }}, key bootstrap-password.
+{{ end }}Reforge encryption/bootstrap credentials: Secret {{ include "reforge.appSecret" . }}.
+Sign in through OIDC, then use bootstrap-token to create the first organisation.
+Store recoverable copies of generated Secrets with database/artifact backups.
+{{ if .Values.runner.enabled }}Built-in runner enabled with non-root, unprivileged execution.
+Image 0.1.26 is NOT compatible with this runner configuration. Select a release
+containing the unprivileged runner changes before deploying this prerelease chart.
+{{ end }}See INSTALL.md in https://github.com/reforgeapp/reforge-helm.

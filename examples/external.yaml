@@ -1,0 +1,19 @@
+publicURL: https://reforge.example.com
+secrets:
+  existingSecret: reforge-app-secrets
+postgresql:
+  enabled: false
+  existingSecret: reforge-database-secrets
+externalDatabase:
+  host: database.example.com
+  name: reforge
+  runtimeUser: reforge_runtime
+  migratorUser: reforge_migrator
+  sslMode: verify-full
+  caSecret: postgres-ca
+authentik:
+  enabled: false
+oidc:
+  issuer: https://identity.example.com/application/o/reforge/
+  clientID: reforge
+  existingSecret: reforge-oidc

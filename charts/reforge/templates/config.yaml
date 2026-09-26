@@ -1,0 +1,47 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "reforge.fullname" . }}
+  labels:
+    {{- include "reforge.labels" . | nindent 4 }}
+automountServiceAccountToken: false
+{{- with .Values.imagePullSecrets }}
+imagePullSecrets:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "reforge.fullname" . }}-config
+  labels:
+    {{- include "reforge.labels" . | nindent 4 }}
+data:
+  REFORGE_ADDRESS: 0.0.0.0:8080
+  REFORGE_PUBLIC_URL: {{ .Values.publicURL | quote }}
+  REFORGE_EDITION: self-hosted
+  REFORGE_ARTIFACT_DIRECTORY: /app/var/artifacts/data
+  REFORGE_ENCRYPTION_KEY_ID: primary
+  REFORGE_DOCS_URL: {{ ternary "/docs/" "" .Values.docs.enabled | quote }}
+  REFORGE_OIDC_ISSUER: {{ include "reforge.oidcIssuer" . | quote }}
+  REFORGE_OIDC_CLIENT_ID: {{ .Values.oidc.clientID | quote }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "reforge.fullname" . }}-database-scripts
+  labels:
+    {{- include "reforge.labels" . | nindent 4 }}
+data:
+  roles.sql: |
+{{ .Files.Get "files/roles.sql" | indent 4 }}
+  authentik.sql: |
+{{ .Files.Get "files/authentik.sql" | indent 4 }}
+  runtime-grants.sql: |
+    \getenv runtime_role RUNTIME_USER
+    \getenv migrator_role PGUSER
+{{ .Files.Get "files/runtime-grants.sql" | replace "reforge_runtime" ":\"runtime_role\"" | replace "reforge_migrator" ":\"migrator_role\"" | indent 4 }}
+  database-urls.py: |
+{{ .Files.Get "files/database-urls.py" | indent 4 }}
+  wait-oidc.py: |
+{{ .Files.Get "files/wait-oidc.py" | indent 4 }}

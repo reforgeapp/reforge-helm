@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: reforge
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/reforgeapp/reforge-helm.git
+    targetRevision: master
+    path: charts/reforge
+    helm:
+      releaseName: reforge
+      valueFiles:
+        - ../../examples/reforgeapp.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: reforge
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true

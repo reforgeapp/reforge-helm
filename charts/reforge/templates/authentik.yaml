@@ -1,0 +1,263 @@
+{{- if .Values.authentik.enabled }}
+{{- $root := . }}
+{{- $fullname := include "reforge.fullname" . }}
+{{- $secret := include "reforge.authentikSecret" . }}
+{{- $databaseHost := printf "%s-postgresql" $fullname }}
+{{- $databaseName := "authentik" }}
+{{- $databaseUser := "authentik" }}
+{{- $databasePort := 5432 }}
+{{- $databaseSSLMode := include "reforge.databaseSSLMode" . }}
+{{- $databaseCASecret := .Values.postgresql.tls.existingSecret }}
+{{- if not .Values.postgresql.enabled }}
+{{- $databaseHost = required "authentik.database.host is required when postgresql.enabled=false" .Values.authentik.database.host }}
+{{- $databaseName = .Values.authentik.database.name }}
+{{- $databaseUser = .Values.authentik.database.user }}
+{{- $databasePort = int .Values.authentik.database.port }}
+{{- $databaseSSLMode = .Values.authentik.database.sslMode }}
+{{- $databaseCASecret = .Values.authentik.database.caSecret }}
+{{- if not .Values.authentik.existingSecret }}
+{{- fail "authentik.existingSecret is required for an external Authentik database" }}
+{{- end }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $fullname }}-authentik-blueprint
+  labels:
+    {{- include "reforge.labels" . | nindent 4 }}
+data:
+  reforge.yaml: |
+    {{- tpl (.Files.Get "files/reforge-blueprint.yaml") . | nindent 4 }}
+{{- range $component := list "server" "worker" }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullname }}-auth-{{ $component }}
+  labels:
+    {{- include "reforge.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: auth-{{ $component }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ $root.Release.Name }}
+      app.kubernetes.io/component: auth-{{ $component }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: {{ $root.Release.Name }}
+        app.kubernetes.io/component: auth-{{ $component }}
+      annotations:
+        checksum/blueprint: {{ tpl ($root.Files.Get "files/reforge-blueprint.yaml") $root | sha256sum }}
+    spec:
+      serviceAccountName: {{ $fullname }}
+      automountServiceAccountToken: false
+      {{- with $root.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $root.Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $root.Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: {{ $component }}
+          image: {{ $root.Values.authentik.image | quote }}
+          imagePullPolicy: IfNotPresent
+          args: [{{ $component | quote }}]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          env:
+            - name: AUTHENTIK_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret }}
+                  key: secret-key
+            - name: AUTHENTIK_WEB__BASE_URL
+              value: {{ trimSuffix "/" $root.Values.authentik.publicURL | quote }}
+            - name: AUTHENTIK_POSTGRESQL__HOST
+              value: {{ $databaseHost | quote }}
+            - name: AUTHENTIK_POSTGRESQL__PORT
+              value: {{ $databasePort | quote }}
+            - name: AUTHENTIK_POSTGRESQL__NAME
+              value: {{ $databaseName | quote }}
+            - name: AUTHENTIK_POSTGRESQL__USER
+              value: {{ $databaseUser | quote }}
+            - name: AUTHENTIK_POSTGRESQL__PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret }}
+                  key: database-password
+            - name: AUTHENTIK_POSTGRESQL__SSLMODE
+              value: {{ $databaseSSLMode | quote }}
+            {{- if $databaseCASecret }}
+            - name: AUTHENTIK_POSTGRESQL__SSLROOTCERT
+              value: /etc/postgresql/ca/ca.crt
+            {{- end }}
+            - name: AUTHENTIK_ERROR_REPORTING__ENABLED
+              value: "false"
+            - name: AUTHENTIK_DISABLE_STARTUP_ANALYTICS
+              value: "true"
+            - name: AUTHENTIK_STORAGE__FILE__PATH
+              value: /data
+            {{- if eq $component "worker" }}
+            - name: AUTHENTIK_BOOTSTRAP_EMAIL
+              value: {{ $root.Values.authentik.bootstrapEmail | quote }}
+            - name: AUTHENTIK_BOOTSTRAP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret }}
+                  key: bootstrap-password
+            - name: REFORGE_OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret }}
+                  key: client-secret
+            {{- end }}
+          {{- if eq $component "server" }}
+          ports:
+            - name: http
+              containerPort: 9000
+          startupProbe:
+            httpGet:
+              path: /-/health/live/
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 90
+          readinessProbe:
+            httpGet:
+              path: /-/health/ready/
+              port: http
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /-/health/live/
+              port: http
+            timeoutSeconds: 3
+          resources:
+            {{- toYaml $root.Values.authentik.serverResources | nindent 12 }}
+          {{- else }}
+          startupProbe:
+            exec:
+              command: [ak, healthcheck]
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 90
+          readinessProbe:
+            exec:
+              command: [ak, healthcheck]
+            timeoutSeconds: 5
+          livenessProbe:
+            exec:
+              command: [ak, healthcheck]
+            timeoutSeconds: 5
+          resources:
+            {{- toYaml $root.Values.authentik.workerResources | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+            - name: shm
+              mountPath: /dev/shm
+            {{- if eq $component "worker" }}
+            - name: blueprint
+              mountPath: /blueprints/mounted/reforge
+              readOnly: true
+            {{- end }}
+            {{- if $databaseCASecret }}
+            - name: database-ca
+              mountPath: /etc/postgresql/ca
+              readOnly: true
+            {{- end }}
+      volumes:
+        - name: data
+          emptyDir:
+            sizeLimit: 128Mi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 128Mi
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 128Mi
+        {{- if eq $component "worker" }}
+        - name: blueprint
+          configMap:
+            name: {{ $fullname }}-authentik-blueprint
+        {{- end }}
+        {{- if $databaseCASecret }}
+        - name: database-ca
+          secret:
+            secretName: {{ $databaseCASecret }}
+            items:
+              - key: ca.crt
+                path: ca.crt
+        {{- end }}
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}-authentik
+  labels:
+    {{- include "reforge.labels" . | nindent 4 }}
+spec:
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: auth-server
+  ports:
+    - name: http
+      port: 9000
+      targetPort: http
+{{- if .Values.authentik.ingress.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $fullname }}-authentik
+  labels:
+    {{- include "reforge.labels" . | nindent 4 }}
+  {{- with .Values.authentik.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.authentik.ingress.className }}
+  ingressClassName: {{ . | quote }}
+  {{- end }}
+  {{- if .Values.authentik.ingress.tlsSecretName }}
+  tls:
+    - hosts:
+        - {{ regexReplaceAll ":[0-9]+$" (urlParse .Values.authentik.publicURL).host "" | quote }}
+      secretName: {{ .Values.authentik.ingress.tlsSecretName }}
+  {{- end }}
+  rules:
+    - host: {{ regexReplaceAll ":[0-9]+$" (urlParse .Values.authentik.publicURL).host "" | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $fullname }}-authentik
+                port:
+                  number: 9000
+{{- end }}
+{{- end }}

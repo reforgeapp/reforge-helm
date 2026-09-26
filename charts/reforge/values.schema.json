@@ -1,0 +1,213 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "publicURL": {
+      "type": "string",
+      "pattern": "^https://[A-Za-z0-9][A-Za-z0-9.-]*(:[0-9]+)?$"
+    },
+    "fullnameOverride": {
+      "type": "string",
+      "maxLength": 40,
+      "pattern": "^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+    },
+    "secrets": {
+      "type": "object",
+      "properties": {
+        "existingSecret": {
+          "type": "string"
+        },
+        "bootstrap": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "ttlHours": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 8760
+            }
+          }
+        }
+      }
+    },
+    "postgresql": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "existingSecret": {
+          "type": "string"
+        }
+      }
+    },
+    "authentik": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "publicURL": {
+          "type": "string",
+          "pattern": "^https://[A-Za-z0-9][A-Za-z0-9.-]*(:[0-9]+)?$"
+        },
+        "existingSecret": {
+          "type": "string"
+        },
+        "database": {
+          "type": "object",
+          "properties": {
+            "host": {
+              "type": "string"
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535
+            },
+            "sslMode": {
+              "enum": [
+                "disable",
+                "require",
+                "verify-ca",
+                "verify-full"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "oidc": {
+      "type": "object",
+      "properties": {
+        "issuer": {
+          "type": "string"
+        },
+        "clientID": {
+          "type": "string",
+          "minLength": 1
+        },
+        "existingSecret": {
+          "type": "string"
+        }
+      }
+    },
+    "externalDatabase": {
+      "type": "object",
+      "properties": {
+        "host": {
+          "type": "string"
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "runtimeUser": {
+          "type": "string",
+          "minLength": 1
+        },
+        "migratorUser": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sslMode": {
+          "enum": [
+            "require",
+            "verify-ca",
+            "verify-full"
+          ]
+        }
+      }
+    },
+    "runner": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "slots": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "extraArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "postgresql": {
+            "properties": {
+              "enabled": {
+                "const": false
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "postgresql": {
+            "properties": {
+              "existingSecret": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "externalDatabase": {
+            "properties": {
+              "host": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "authentik": {
+            "properties": {
+              "enabled": {
+                "const": false
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "oidc": {
+            "properties": {
+              "issuer": {
+                "type": "string",
+                "pattern": "^https://[^ ]+$"
+              },
+              "existingSecret": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
