@@ -1,0 +1,30 @@
+name: Check chart
+on:
+  pull_request:
+  push:
+    branches: [master]
+permissions:
+  contents: read
+jobs:
+  chart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.14'
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4
+        with:
+          version: v3.20.0
+      - run: python -m pip install PyYAML==6.0.3
+      - run: helm lint charts/reforge --strict
+      - run: python scripts/test_provisioning.py
+      - run: python scripts/check_chart.py
+      - run: |
+          mkdir -p "$RUNNER_TEMP/reforge-tools"
+          GOBIN="$RUNNER_TEMP/reforge-tools" go install github.com/yannh/kubeconform/cmd/kubeconform@v0.8.0
+          for values in examples/reforgeapp.yaml examples/external.yaml; do
+            helm template reforge charts/reforge --namespace reforge -f "$values" > "$RUNNER_TEMP/reforge.yaml"
+            "$RUNNER_TEMP/reforge-tools/kubeconform" -strict -summary -kubernetes-version 1.36.3 "$RUNNER_TEMP/reforge.yaml"
+          done
+      - run: helm package charts/reforge --destination dist
