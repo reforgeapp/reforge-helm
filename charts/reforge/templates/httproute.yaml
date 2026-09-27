@@ -1,0 +1,69 @@
+{{- if .Values.gatewayAPI.enabled }}
+{{- $fullname := include "reforge.fullname" . }}
+{{- $root := . }}
+{{- range $parent := .Values.gatewayAPI.parentRefs }}
+{{- range $redirect := $root.Values.gatewayAPI.httpRedirectParentRefs }}
+{{- if and (eq $parent.name $redirect.name) (eq (default $root.Release.Namespace $parent.namespace) (default $root.Release.Namespace $redirect.namespace)) (eq $parent.sectionName $redirect.sectionName) }}
+{{- fail "gatewayAPI.parentRefs and gatewayAPI.httpRedirectParentRefs must target distinct listeners" }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- $routes := list (dict "name" $fullname "publicURL" .Values.publicURL "service" (printf "%s-control" $fullname) "port" 80 "docs" .Values.docs.enabled) }}
+{{- if .Values.authentik.enabled }}
+{{- $routes = append $routes (dict "name" (printf "%s-authentik" $fullname) "publicURL" .Values.authentik.publicURL "service" (printf "%s-authentik" $fullname) "port" 9000 "docs" false) }}
+{{- end }}
+{{- range $route := $routes }}
+{{- $authority := (urlParse $route.publicURL).host }}
+{{- $host := regexReplaceAll ":[0-9]+$" $authority "" }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ $route.name }}
+  labels:
+    {{- include "reforge.labels" $root | nindent 4 }}
+spec:
+  parentRefs:
+    {{- toYaml $root.Values.gatewayAPI.parentRefs | nindent 4 }}
+  hostnames:
+    - {{ $host | quote }}
+  rules:
+    {{- if $route.docs }}
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /docs
+      backendRefs:
+        - name: {{ $fullname }}-docs
+          port: 80
+    {{- end }}
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: {{ $route.service }}
+          port: {{ $route.port }}
+{{- if $root.Values.gatewayAPI.httpRedirectParentRefs }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ $route.name }}-http
+  labels:
+    {{- include "reforge.labels" $root | nindent 4 }}
+spec:
+  parentRefs:
+    {{- toYaml $root.Values.gatewayAPI.httpRedirectParentRefs | nindent 4 }}
+  hostnames:
+    - {{ $host | quote }}
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            port: {{ regexFind ":[0-9]+$" $authority | trimPrefix ":" | default "443" | int }}
+            statusCode: 301
+{{- end }}
+{{- end }}
+{{- end }}

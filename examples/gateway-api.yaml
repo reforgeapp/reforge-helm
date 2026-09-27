@@ -1,0 +1,17 @@
+publicURL: https://app.reforgeapp.dev
+authentik:
+  publicURL: https://auth.reforgeapp.dev
+  ingress:
+    enabled: false
+ingress:
+  enabled: false
+gatewayAPI:
+  enabled: true
+  parentRefs:
+    - name: private
+      namespace: kgateway-system
+      sectionName: https
+  httpRedirectParentRefs:
+    - name: private
+      namespace: kgateway-system
+      sectionName: http

@@ -117,3 +117,7 @@ networkPolicy:
 nodeSelector:
   kubernetes.io/arch: amd64
 tolerations: []
+gatewayAPI:
+  enabled: false
+  parentRefs: []
+  httpRedirectParentRefs: []

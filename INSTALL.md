@@ -49,6 +49,14 @@ Bring your own
 - Authentik credentials: set `authentik.existingSecret` with its four keys. With external PostgreSQL, additionally configure `authentik.database` and create that database/user yourself. With bundled PostgreSQL, Authentik uses its own database and restricted role.
 - Built-in runner: `runner.enabled=false` allows separately enrolled runners. Otherwise the runner shares its generated token/catalog with control through private files, uses one slot by default (currently 6 GiB memory and two CPUs per job; increase container resources when adding slots), and has no privileged mode or host filesystem mounts. `runtimeClassName` and `extraArgs` accommodate the final unprivileged runtime contract; merely setting a RuntimeClass does not prove sandbox compatibility.
 
+Gateway API
+
+Set `gatewayAPI.enabled=true` and `gatewayAPI.parentRefs` to an existing Gateway's HTTPS listener. Set `ingress.enabled=false` and `authentik.ingress.enabled=false` for Gateway-only routing. `examples/gateway-api.yaml` targets `kgateway-system/private`, listener `https`, with optional HTTP-to-HTTPS redirects on listener `http`.
+
+The chart creates HTTPRoutes for Reforge (`/`), docs (`/docs`), and bundled Authentik. Set `gatewayAPI.httpRedirectParentRefs=[]` to omit redirect routes. When using external OIDC, no Authentik route is created. Application and identity hostnames come from their existing `publicURL` values; custom HTTPS ports are retained in redirects.
+
+Install Gateway API v1 CRDs/controller separately. The Gateway must terminate trusted TLS for both `app.reforgeapp.dev` and `auth.reforgeapp.dev` (or your selected hostnames), and its listener `allowedRoutes` must permit the release namespace. The chart does not create or modify Gateways, certificates, or DNS. Ingress and Gateway routing can coexist when both are deliberately enabled.
+
 Database TLS
 
 Bundled PostgreSQL defaults to namespace-restricted network access without transport TLS. Set `postgresql.tls.existingSecret` to enable verified TLS; the Secret must contain `tls.crt`, `tls.key`, and `ca.crt`, with a server certificate covering `<release>-postgresql` (or the name from `fullnameOverride`). External database connections default to `verify-full`; supply `externalDatabase.caSecret` containing `ca.crt` for a private CA. Authentik's external database has separate TLS settings. DNS and outbound provider access remain unrestricted by NetworkPolicy.
