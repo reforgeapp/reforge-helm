@@ -23,7 +23,7 @@ Published releases are available from GitHub Pages:
 ```sh
 helm repo add reforge https://reforgeapp.github.io/reforge-helm
 helm repo update reforge
-helm upgrade --install reforge reforge/reforge --namespace reforge --create-namespace --version 0.1.0 -f values.yaml
+helm upgrade --install reforge reforge/reforge --namespace reforge --create-namespace --version 0.1.1 -f values.yaml
 ```
 
 Generated secrets

@@ -8,7 +8,7 @@ spec:
   source:
     chart: reforge
     repoURL: https://reforgeapp.github.io/reforge-helm
-    targetRevision: 0.1.0
+    targetRevision: 0.1.1
     helm:
       releaseName: reforge
       valuesObject:
