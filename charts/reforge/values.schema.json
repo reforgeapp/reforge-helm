@@ -142,6 +142,67 @@
           "items": {
             "type": "string"
           }
+        },
+        "kubernetes": {
+          "type": "object",
+          "properties": {
+            "namespace": {
+              "type": "string",
+              "maxLength": 63,
+              "pattern": "^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+            },
+            "createNamespace": {
+              "type": "boolean"
+            },
+            "runtimeClassName": {
+              "type": "string"
+            },
+            "imagePullSecrets": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "memoryBytes": {
+              "type": "integer",
+              "minimum": 268435456,
+              "maximum": 68719476736
+            },
+            "diskBytes": {
+              "type": "integer",
+              "minimum": 16777216,
+              "maximum": 1099511627776
+            },
+            "cpus": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 32
+            },
+            "images": {
+              "type": "object",
+              "required": [
+                "go",
+                "javascript",
+                "python"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "go": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9][a-z0-9.-]*(?::[0-9]+)?/[a-z0-9][a-z0-9._/-]*@sha256:[0-9a-f]{64}$"
+                },
+                "javascript": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9][a-z0-9.-]*(?::[0-9]+)?/[a-z0-9][a-z0-9._/-]*@sha256:[0-9a-f]{64}$"
+                },
+                "python": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9][a-z0-9.-]*(?::[0-9]+)?/[a-z0-9][a-z0-9._/-]*@sha256:[0-9a-f]{64}$"
+                }
+              }
+            }
+          }
         }
       }
     },

@@ -76,16 +76,26 @@ runner:
     repository: ghcr.io/reforgeapp/reforge-runner
     tag: ""
   slots: 1
-  runtimeClassName: ""
   extraArgs: []
   resources:
     requests:
       cpu: 500m
       memory: 1Gi
     limits:
-      memory: 8Gi
-  stateSizeLimit: 8Gi
-  cacheSizeLimit: 4Gi
+      memory: 1Gi
+  stateSizeLimit: 1Gi
+  kubernetes:
+    namespace: ""
+    createNamespace: true
+    runtimeClassName: ""
+    imagePullSecrets: []
+    memoryBytes: 6442450944
+    diskBytes: 3221225472
+    cpus: 2
+    images:
+      go: ghcr.io/reforgeapp/reforge-workspace-go@sha256:fce1bddcc7d96c624cd2845c8d1ba1d042680ecbba740b92f611c4fa23368654
+      javascript: ghcr.io/reforgeapp/reforge-workspace-javascript@sha256:beb3a52ddd1f4a23a13546afe6cf4e27fd3d6c36c12dd1480b6a45db34bc0db9
+      python: ghcr.io/reforgeapp/reforge-workspace-python@sha256:cd9b539f05cb8f2bd054dfd19691504f372f391d5516d6af3fe4e1515edcbc03
 control:
   resources:
     requests:

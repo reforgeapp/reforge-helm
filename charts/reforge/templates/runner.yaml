@@ -1,0 +1,129 @@
+{{- if .Values.runner.enabled }}
+{{- $namespace := include "reforge.workspaceNamespace" . }}
+{{- if .Values.runner.kubernetes.createNamespace }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $namespace }}
+  labels:
+    {{- include "reforge.labels" . | nindent 4 }}
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.31
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+{{- end }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "reforge.fullname" . }}-runner
+  labels:
+    {{- include "reforge.labels" . | nindent 4 }}
+automountServiceAccountToken: false
+{{- with .Values.imagePullSecrets }}
+imagePullSecrets:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "reforge.fullname" . }}-runner
+  namespace: {{ $namespace }}
+  labels:
+    {{- include "reforge.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [create, get, list, delete]
+  - apiGroups: [""]
+    resources: [pods/exec]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "reforge.fullname" . }}-runner
+  namespace: {{ $namespace }}
+  labels:
+    {{- include "reforge.labels" . | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "reforge.fullname" . }}-runner
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "reforge.fullname" . }}-runner
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "reforge.fullname" . }}-runner
+  labels:
+    {{- include "reforge.labels" . | nindent 4 }}
+data:
+  runtime.json: {{ include "reforge.runtimeConfig" . | quote }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "reforge.fullname" . }}-workspace-deny
+  namespace: {{ $namespace }}
+  labels:
+    {{- include "reforge.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "reforge.fullname" . }}-workspace-registry
+  namespace: {{ $namespace }}
+  labels:
+    {{- include "reforge.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: reforge-workspace
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Release.Namespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: {{ .Release.Name }}
+              app.kubernetes.io/component: control
+      ports:
+        - protocol: TCP
+          port: 8086
+{{- if .Values.networkPolicy.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "reforge.fullname" . }}-runner-registry
+  labels:
+    {{- include "reforge.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: control
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $namespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: reforge-workspace
+      ports:
+        - protocol: TCP
+          port: 8086
+{{- end }}
+{{- end }}

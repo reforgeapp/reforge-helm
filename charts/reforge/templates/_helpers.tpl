@@ -65,3 +65,29 @@ readOnlyRootFilesystem: true
 capabilities:
   drop: [ALL]
 {{- end -}}
+
+{{- define "reforge.workspaceNamespace" -}}
+{{- $namespace := default (printf "%s-%s-workspaces" .Release.Namespace (include "reforge.fullname" .)) .Values.runner.kubernetes.namespace -}}
+{{- if gt (len $namespace) 63 -}}
+{{- fail "set runner.kubernetes.namespace to a dedicated namespace of at most 63 characters" -}}
+{{- end -}}
+{{- if eq $namespace .Release.Namespace -}}
+{{- fail "runner.kubernetes.namespace must differ from the application namespace" -}}
+{{- end -}}
+{{- $namespace -}}
+{{- end -}}
+{{- define "reforge.toolchains" -}}
+{{- $toolchains := dict -}}
+{{- range $name, $image := .Values.runner.kubernetes.images -}}
+{{- $_ := set $toolchains $name (last (splitList "@" $image)) -}}
+{{- end -}}
+{{- $toolchains | toJson -}}
+{{- end -}}
+{{- define "reforge.runtimeConfig" -}}
+{{- $images := dict -}}
+{{- range $name, $image := .Values.runner.kubernetes.images -}}
+{{- $_ := set $images (last (splitList "@" $image)) $image -}}
+{{- end -}}
+{{- $kubernetes := dict "namespace" (include "reforge.workspaceNamespace" .) "runtime_class_name" .Values.runner.kubernetes.runtimeClassName "image_pull_secrets" .Values.runner.kubernetes.imagePullSecrets "images" $images "toolchains" (include "reforge.toolchains" . | fromJson) "broker_listen_address" "0.0.0.0:8086" -}}
+{{- dict "backend" "kubernetes" "kubernetes" $kubernetes "memory_bytes" .Values.runner.kubernetes.memoryBytes "disk_bytes" .Values.runner.kubernetes.diskBytes "cpus" .Values.runner.kubernetes.cpus "max_processes" 0 | toJson -}}
+{{- end -}}

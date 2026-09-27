@@ -1,11 +1,11 @@
 Reforge Helm chart bundles PostgreSQL, Authentik, docs, and the built-in runner. Disable bundled services and reference existing Secrets to use your own infrastructure.
 
-This is a prerelease chart. Reforge `0.1.26` still requires privileged runner execution. The chart deliberately runs its runner unprivileged; select a compatible Reforge release when the parallel runner work is published. Until then, set `runner.enabled=false` for the control/UI stack. Repair execution will be unavailable. No live Kubernetes deployment has been verified.
+The built-in runner launches restricted Kubernetes workspace pods. Kubernetes 1.31 or newer and a CNI enforcing NetworkPolicy are required. Runner unit/race tests and restricted-container startup pass; live Kubernetes repair execution remains unverified.
 
 Deployment
 
 1. Copy `examples/reforgeapp.yaml` into your GitOps configuration. Set the Reforge and Authentik HTTPS origins, ingress class, TLS Secrets or certificate-manager annotations, and storage class. Both origins must resolve and have trusted TLS; Reforge waits for Authentik discovery during startup. The supplied example uses `app.reforgeapp.dev` and `auth.reforgeapp.dev`; Cloudflare credentials must cover that zone.
-2. Select matching application, docs, and runner image versions. By default they inherit `Chart.yaml`'s `appVersion`; override `image.tag`, `docs.image.tag`, and `runner.image.tag` together. Keep `runner.enabled=false` until an unprivileged-compatible version is available. For private registries, supply `imagePullSecrets`; public images need none.
+2. Select matching application, docs, and runner image versions. By default they inherit `Chart.yaml`'s `appVersion`; override `image.tag`, `docs.image.tag`, and `runner.image.tag` together. Workspace images are separately pinned by OCI digest in `runner.kubernetes.images`; update those pins together with the compatible runner release. Published public Reforge images allow anonymous pulls. For private registries, supply `imagePullSecrets`; public images need none.
 3. Use `examples/argocd.yaml` as the Argo CD Application, or your existing Helm GitOps controller. Pin `targetRevision` to a reviewed commit. Create the namespace before pre-install hooks run; Argo's `CreateNamespace=true` handles this. Use a full sync, since selective sync skips provisioning hooks. Do not deploy both this chart and the earlier raw Reforge manifests into the same namespace.
 4. Wait for PostgreSQL role setup, Reforge schema migrations/grants, and Authentik provider provisioning. The control pod runs these init steps before serving requests. Sign into Authentik as `akadmin` with the generated bootstrap password, then sign into Reforge. Use Reforge's bootstrap token to create the first organisation and its owner. Configure repository/model connections and budgets.
 5. Set `secrets.bootstrap.enabled=false` after creating the organisation. Change the initial Authentik administrator password. Store recoverable Secret copies with database and artifact backups.
@@ -13,14 +13,14 @@ Deployment
 Local validation only:
 
 ```sh
-helm lint charts/reforge --strict
-helm template reforge charts/reforge --namespace reforge -f examples/reforgeapp.yaml
+helm lint charts/reforge --strict --kube-version 1.36.3
+helm template reforge charts/reforge --namespace reforge --kube-version 1.36.3 -f examples/reforgeapp.yaml
 helm package charts/reforge --destination dist
 ```
 
 Generated secrets
 
-An install/upgrade hook creates missing Secrets using cryptographic randomness. Helm rendering is deterministic; upgrades and GitOps refreshes do not regenerate credentials. Existing generated Secrets are validated and reused, including expired bootstrap tokens. The provisioner has namespace-scoped Secret creation and read access restricted to its generated names; application pods do not receive Kubernetes API credentials.
+An install/upgrade hook creates missing Secrets using cryptographic randomness. Helm rendering is deterministic; upgrades and GitOps refreshes do not regenerate credentials. Existing generated Secrets are validated and reused, including expired bootstrap tokens. The provisioner has namespace-scoped Secret creation and read access restricted to its generated names; only the provisioner and runner containers receive Kubernetes API credentials. The runner credential is mounted only into its container and is authorized solely for workspace pod operations in a separate namespace.
 
 For release `reforge`, generated Secrets contain:
 
@@ -47,7 +47,7 @@ Bring your own
 - Database credentials: set `postgresql.existingSecret`. Bundled PostgreSQL needs all three database keys. For external PostgreSQL, also set `postgresql.enabled=false` and `externalDatabase` host/name/users/port/TLS; only `migrator-password` and `runtime-password` are required. Provision those roles yourself. The migrator must own the Reforge database/schema; runtime must have no ownership, schema CREATE, superuser, or bypass-RLS privilege. Chart startup runs migrations and grants runtime access using the configured names. `examples/external.yaml` shows this configuration.
 - Existing OIDC: set `authentik.enabled=false`, `oidc.issuer`, `oidc.clientID`, and `oidc.existingSecret` containing `client-secret`. Register exact callback `<publicURL>/auth/callback` and scopes `openid profile email`.
 - Authentik credentials: set `authentik.existingSecret` with its four keys. With external PostgreSQL, additionally configure `authentik.database` and create that database/user yourself. With bundled PostgreSQL, Authentik uses its own database and restricted role.
-- Built-in runner: `runner.enabled=false` allows separately enrolled runners. Otherwise the runner shares its generated token/catalog with control through private files, uses one slot by default (currently 6 GiB memory and two CPUs per job; increase container resources when adding slots), and has no privileged mode or host filesystem mounts. `runtimeClassName` and `extraArgs` accommodate the final unprivileged runtime contract; merely setting a RuntimeClass does not prove sandbox compatibility.
+- Built-in runner: `runner.enabled=false` allows separately enrolled runners. Otherwise the runner shares its generated token/catalog with control through private files and starts restricted workspace pods using namespace-scoped create/get/list/delete/exec permissions. There are no privileged containers or host filesystem mounts. `runner.kubernetes.runtimeClassName` applies to workspace pods; it does not change the control pod runtime.
 
 Gateway API
 
@@ -56,6 +56,18 @@ Set `gatewayAPI.enabled=true` and `gatewayAPI.parentRefs` to an existing Gateway
 The chart creates HTTPRoutes for Reforge (`/`), docs (`/docs`), and bundled Authentik. Set `gatewayAPI.httpRedirectParentRefs=[]` to omit redirect routes. When using external OIDC, no Authentik route is created. Application and identity hostnames come from their existing `publicURL` values; custom HTTPS ports are retained in redirects.
 
 Install Gateway API v1 CRDs/controller separately. The Gateway must terminate trusted TLS for both `app.reforgeapp.dev` and `auth.reforgeapp.dev` (or your selected hostnames), and its listener `allowedRoutes` must permit the release namespace. The chart does not create or modify Gateways, certificates, or DNS. Ingress and Gateway routing can coexist when both are deliberately enabled.
+
+Workspace isolation
+
+The chart creates a dedicated `<application-namespace>-<release>-workspaces` namespace with restricted Pod Security Admission. Set `runner.kubernetes.namespace` to override it; with `createNamespace=false`, provision that dedicated namespace and restricted admission policy through GitOps first. Never use the application namespace or a namespace containing other workloads/secrets. Workspace NetworkPolicies always deny ingress and egress except TCP8086 to the runner's registry proxy, even when application `networkPolicy.enabled=false`.
+
+Only the runner mounts its projected API token. Workspaces mount no service-account credentials and use UID65532, a read-only root filesystem, dropped capabilities, and RuntimeDefault seccomp. Artifacts and snapshots stream through the Kubernetes exec API; workspaces need no application PVC or Secret access.
+
+Default workspace limits are two CPUs, 6 GiB RAM, and 3 GiB scratch space. `runner.kubernetes.cpus`, `memoryBytes`, and `diskBytes` configure per-workspace limits; `runner.resources` configures the coordinator itself. `runner.slots` controls concurrent jobs. Configure kubelet `podPidsLimit` on eligible nodes through node GitOps: Kubernetes has no per-Pod PID limit field and the backend cannot enforce its old local process limit. The reviewed cluster currently reports `podPidsLimit=-1` on all three nodes; fix that before unattended repairs. [Kubernetes PID limits](https://kubernetes.io/docs/concepts/policy/pid-limiting/)
+
+Standard runtimes share the host kernel. Set a supported gVisor/Kata RuntimeClass if stronger isolation is required. Current workspace images are amd64; the backend does not inherit chart `nodeSelector` or tolerations. Mixed-architecture/tainted clusters need appropriate RuntimeClass scheduling or an application backend extension. Existing cluster nodes are all amd64; no gVisor/Kata RuntimeClass is currently installed.
+
+Private workspace image pull Secrets must exist in the workspace namespace and be named in `runner.kubernetes.imagePullSecrets`. Application `imagePullSecrets` remain separate. Workspace images must contain Reforge's workspace helper; plain language-toolchain images are insufficient.
 
 Database TLS
 

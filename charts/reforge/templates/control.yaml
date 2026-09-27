@@ -34,11 +34,14 @@ spec:
     metadata:
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/config.yaml") . | sha256sum }}
+        {{- if .Values.runner.enabled }}
+        checksum/runner: {{ include "reforge.runtimeConfig" . | sha256sum }}
+        {{- end }}
       labels:
         {{- include "reforge.labels" . | nindent 8 }}
         app.kubernetes.io/component: control
     spec:
-      serviceAccountName: {{ include "reforge.fullname" . }}
+      serviceAccountName: {{ include "reforge.fullname" . }}{{ if .Values.runner.enabled }}-runner{{ end }}
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 60
       {{- with .Values.imagePullSecrets }}
@@ -53,9 +56,6 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- if and .Values.runner.enabled .Values.runner.runtimeClassName }}
-      runtimeClassName: {{ .Values.runner.runtimeClassName | quote }}
-      {{- end }}
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
@@ -69,38 +69,26 @@ spec:
         - name: builtin-init
           image: {{ include "reforge.runnerImage" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command: [/app/reforge-runner]
-          args: [builtin-init, --dir, /builtin]
-          securityContext:
-            runAsUser: 10002
-            {{- include "reforge.securityContext" . | nindent 12 }}
-          volumeMounts:
-            - name: builtin
-              mountPath: /builtin
-          resources:
-            requests:
-              cpu: 100m
-              memory: 64Mi
-            limits:
-              memory: 256Mi
-        {{- else }}
-        - name: recipe-catalog
-          image: {{ include "reforge.runnerImage" . | quote }}
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: [/bin/sh, -ec]
           args:
             - |
-              umask 027
-              go_digest="$(/app/reforge-runner image-digest --path /app/images/go)"
-              javascript_digest="$(/app/reforge-runner image-digest --path /app/images/javascript)"
-              python_digest="$(/app/reforge-runner image-digest --path /app/images/python)"
-              printf '{"go":"%s","javascript":"%s","python":"%s"}\n' "$go_digest" "$javascript_digest" "$python_digest" > /builtin/repair-images.json
+              cp /runtime-source/runtime.json /builtin/runtime.json
+              chmod 0640 /builtin/runtime.json
+              exec /app/reforge-runner builtin-init --dir /builtin --runtime-config /builtin/runtime.json
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
           securityContext:
             runAsUser: 10002
             {{- include "reforge.securityContext" . | nindent 12 }}
           volumeMounts:
             - name: builtin
               mountPath: /builtin
+            - name: runtime-source
+              mountPath: /runtime-source
+              readOnly: true
           resources:
             requests:
               cpu: 100m
@@ -117,10 +105,6 @@ spec:
             - |
               . /database/runtime.env
               export REFORGE_DATABASE_URL
-              {{- if not .Values.runner.enabled }}
-              REFORGE_REPAIR_IMAGES="$(cat /builtin/repair-images.json)"
-              export REFORGE_REPAIR_IMAGES
-              {{- end }}
               exec /app/reforge
           ports:
             - name: http
@@ -165,9 +149,11 @@ spec:
             - name: database
               mountPath: /database
               readOnly: true
+            {{- if .Values.runner.enabled }}
             - name: builtin
               mountPath: /builtin
               readOnly: true
+            {{- end }}
             {{- if include "reforge.databaseCASecret" . }}
             - name: database-ca
               mountPath: /database-ca
@@ -208,12 +194,21 @@ spec:
             - /var/lib/reforge-runner/data
             - --slots
             - {{ .Values.runner.slots | quote }}
+            - --runtime-config
+            - /builtin/runtime.json
             {{- with .Values.runner.extraArgs }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
+          ports:
+            - name: registry-proxy
+              containerPort: 8086
           env:
             - name: REFORGE_PUBLIC_URL
               value: {{ .Values.publicURL | quote }}
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
           securityContext:
             runAsUser: 10002
             {{- include "reforge.securityContext" . | nindent 12 }}
@@ -223,8 +218,9 @@ spec:
               readOnly: true
             - name: runner-state
               mountPath: /var/lib/reforge-runner
-            - name: runner-cache
-              mountPath: /var/cache/reforge-deps
+            - name: runner-api
+              mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+              readOnly: true
             - name: runner-tmp
               mountPath: /tmp
           resources:
@@ -256,17 +252,29 @@ spec:
               - key: ca.crt
                 path: ca.crt
         {{- end }}
+        {{- if .Values.runner.enabled }}
         - name: builtin
           emptyDir:
             medium: Memory
             sizeLimit: 1Mi
-        {{- if .Values.runner.enabled }}
+        - name: runtime-source
+          configMap:
+            name: {{ include "reforge.fullname" . }}-runner
+        - name: runner-api
+          projected:
+            defaultMode: 0440
+            sources:
+              - serviceAccountToken:
+                  path: token
+                  expirationSeconds: 3600
+              - configMap:
+                  name: kube-root-ca.crt
+                  items:
+                    - key: ca.crt
+                      path: ca.crt
         - name: runner-state
           emptyDir:
             sizeLimit: {{ .Values.runner.stateSizeLimit }}
-        - name: runner-cache
-          emptyDir:
-            sizeLimit: {{ .Values.runner.cacheSizeLimit }}
         - name: runner-tmp
           emptyDir:
             sizeLimit: 1Gi
