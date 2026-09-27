@@ -6,7 +6,7 @@ Deployment
 
 1. Copy `examples/reforgeapp.yaml` into your GitOps configuration. Set the Reforge and Authentik HTTPS origins, ingress class, TLS Secrets or certificate-manager annotations, and storage class. Both origins must resolve and have trusted TLS; Reforge waits for Authentik discovery during startup. The supplied example uses `app.reforgeapp.dev` and `auth.reforgeapp.dev`; Cloudflare credentials must cover that zone.
 2. Select matching application, docs, and runner image versions. By default they inherit `Chart.yaml`'s `appVersion`; override `image.tag`, `docs.image.tag`, and `runner.image.tag` together. Workspace images are separately pinned by OCI digest in `runner.kubernetes.images`; update those pins together with the compatible runner release. Published public Reforge images allow anonymous pulls. For private registries, supply `imagePullSecrets`; public images need none.
-3. Use `examples/argocd.yaml` as the Argo CD Application, or your existing Helm GitOps controller. Pin `targetRevision` to a reviewed commit. Create the namespace before pre-install hooks run; Argo's `CreateNamespace=true` handles this. Use a full sync, since selective sync skips provisioning hooks. Do not deploy both this chart and the earlier raw Reforge manifests into the same namespace.
+3. Use `examples/argocd.yaml` as the Argo CD Application, or your existing Helm GitOps controller. Pin `targetRevision` to a chart version. Create the namespace before pre-install hooks run; Argo's `CreateNamespace=true` handles this. Use a full sync, since selective sync skips provisioning hooks. Do not deploy both this chart and earlier raw Reforge manifests into the same namespace.
 4. Wait for PostgreSQL role setup, Reforge schema migrations/grants, and Authentik provider provisioning. The control pod runs these init steps before serving requests. Sign into Authentik as `akadmin` with the generated bootstrap password, then sign into Reforge. Use Reforge's bootstrap token to create the first organisation and its owner. Configure repository/model connections and budgets.
 5. Set `secrets.bootstrap.enabled=false` after creating the organisation. Change the initial Authentik administrator password. Store recoverable Secret copies with database and artifact backups.
 
@@ -16,6 +16,14 @@ Local validation only:
 helm lint charts/reforge --strict --kube-version 1.36.3
 helm template reforge charts/reforge --namespace reforge --kube-version 1.36.3 -f examples/reforgeapp.yaml
 helm package charts/reforge --destination dist
+```
+
+Published releases are available from GitHub Pages:
+
+```sh
+helm repo add reforge https://reforgeapp.github.io/reforge-helm
+helm repo update reforge
+helm upgrade --install reforge reforge/reforge --namespace reforge --create-namespace --version 0.1.0 -f values.yaml
 ```
 
 Generated secrets

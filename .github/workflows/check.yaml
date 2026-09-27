@@ -30,3 +30,21 @@ jobs:
             "$RUNNER_TEMP/reforge-tools/kubeconform" -strict -summary -kubernetes-version 1.36.3 -schema-location default -schema-location "$RUNNER_TEMP/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json" "$RUNNER_TEMP/reforge.yaml"
           done
       - run: helm package charts/reforge --destination dist
+  release:
+    if: github.event_name == 'push'
+    needs: chart
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4
+        with:
+          version: v3.20.0
+      - uses: helm/chart-releaser-action@cae68fefc6b5f367a0275617c9f83181ba54714f
+        with:
+          skip_existing: true
+        env:
+          CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"

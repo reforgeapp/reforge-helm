@@ -6,13 +6,32 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/reforgeapp/reforge-helm.git
-    targetRevision: master
-    path: charts/reforge
+    chart: reforge
+    repoURL: https://reforgeapp.github.io/reforge-helm
+    targetRevision: 0.1.0
     helm:
       releaseName: reforge
-      valueFiles:
-        - ../../examples/reforgeapp.yaml
+      valuesObject:
+        publicURL: https://app.reforgeapp.dev
+        postgresql:
+          persistence:
+            storageClass: px-pool-xfs
+        control:
+          artifacts:
+            storageClass: px-pool-xfs
+        authentik:
+          publicURL: https://auth.reforgeapp.dev
+          bootstrapEmail: admin@reforgeapp.dev
+          ingress:
+            className: cloudflare-tunnel
+            annotations:
+              cert-manager.io/cluster-issuer: le-dns-issuer
+            tlsSecretName: reforge-authentik-tls
+        ingress:
+          className: cloudflare-tunnel
+          annotations:
+            cert-manager.io/cluster-issuer: le-dns-issuer
+          tlsSecretName: reforge-app-tls
   destination:
     server: https://kubernetes.default.svc
     namespace: reforge
