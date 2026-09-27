@@ -1,0 +1,78 @@
+name: Sync Reforge release
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+  repository_dispatch:
+    types: [reforge-release]
+permissions:
+  contents: write
+  packages: read
+concurrency:
+  group: reforge-helm-release-master
+  cancel-in-progress: false
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.14'
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4
+        with:
+          version: v3.20.0
+      - id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="$(gh release view --repo reforgeapp/reforge --json tagName --jq '.tagName')"
+          version="${tag#v}"
+          current="$(sed -n 's/^appVersion: "\([0-9.]*\)"$/\1/p' charts/reforge/Chart.yaml)"
+          if [ "$version" = "$current" ]; then
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo 'changed=true' >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          for image in go javascript python; do
+            digest="$(docker buildx imagetools inspect "ghcr.io/reforgeapp/reforge-workspace-$image:$version" --format '{{json .Manifest}}' | jq -r '.digest')"
+            if ! printf '%s' "$digest" | grep -Eq '^sha256:[0-9a-f]{64}$'; then
+              echo "Invalid digest for $image" >&2
+              exit 1
+            fi
+            echo "${image}_digest=$digest" >> "$GITHUB_OUTPUT"
+          done
+      - if: steps.release.outputs.changed == 'true'
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+          GO_DIGEST: ${{ steps.release.outputs.go_digest }}
+          JAVASCRIPT_DIGEST: ${{ steps.release.outputs.javascript_digest }}
+          PYTHON_DIGEST: ${{ steps.release.outputs.python_digest }}
+        run: python scripts/sync_reforge_release.py "$VERSION" "$GO_DIGEST" "$JAVASCRIPT_DIGEST" "$PYTHON_DIGEST"
+      - if: steps.release.outputs.changed == 'true'
+        run: python -m pip install PyYAML==6.0.3
+      - if: steps.release.outputs.changed == 'true'
+        run: |
+          helm lint charts/reforge --strict --kube-version 1.36.3
+          python scripts/test_provisioning.py
+          python scripts/check_chart.py
+          helm package charts/reforge --destination dist
+      - if: steps.release.outputs.changed == 'true'
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add charts/reforge/Chart.yaml charts/reforge/values.yaml
+          git commit -m "chore: update Reforge to $VERSION"
+          git push origin HEAD:master
+      - if: steps.release.outputs.changed == 'true'
+        uses: helm/chart-releaser-action@cae68fefc6b5f367a0275617c9f83181ba54714f
+        with:
+          skip_existing: true
+        env:
+          CR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
