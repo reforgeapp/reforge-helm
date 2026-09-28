@@ -98,9 +98,9 @@ runner:
     diskBytes: 3221225472
     cpus: 2
     images:
-      go: ghcr.io/reforgeapp/reforge-workspace-go@sha256:421739f402e231bdcd9df7c55f4c2aadbf464f139dd9d5d788be5c73d2d9f263
-      javascript: ghcr.io/reforgeapp/reforge-workspace-javascript@sha256:a58dc9601d193bee9b771ff2297486b60882cb431a1d33d88750ab405700e1bc
-      python: ghcr.io/reforgeapp/reforge-workspace-python@sha256:91a2321592299a7ee8816e396c3f4e7b2aa79dadb78deeeae9c982a08950e072
+      go: ghcr.io/reforgeapp/reforge-workspace-go@sha256:71243e35bead0945c1925adf08a407270b12c23e5941621cbd1f16a60bd311b6
+      javascript: ghcr.io/reforgeapp/reforge-workspace-javascript@sha256:fb889c32f408b1b4669793461bdac2182feae95f962d057a7e70db175419e0f5
+      python: ghcr.io/reforgeapp/reforge-workspace-python@sha256:5c1378d97275e12052f222a75a1c01cdf8ea8ba9c66c5ed8c0ddb3f4dd305777
 control:
   resources:
     requests:
