@@ -111,6 +111,8 @@ class ChartTests(unittest.TestCase):
         _, scaled = render({"control": {"replicas": 2}})
         self.assertEqual(resource(scaled, "Deployment", "-control")["spec"]["replicas"], 2)
         self.assertEqual([c["name"] for c in resource(scaled, "Deployment", "-control")["spec"]["template"]["spec"]["containers"]], ["control"])
+        env = {item["name"]: item.get("value") for item in resource(scaled, "Deployment", "-control")["spec"]["template"]["spec"]["containers"][0]["env"]}
+        self.assertEqual(env["REFORGE_POD_ADDRESS"], "$(POD_IP):8080")
         runner = resource(scaled, "Deployment", "-runner")
         self.assertEqual((runner["spec"]["replicas"], runner["spec"]["strategy"]["type"]), (1, "Recreate"))
         self.assertIn("http://verify-control", runner["spec"]["template"]["spec"]["containers"][0]["args"])
