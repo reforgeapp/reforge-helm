@@ -121,9 +121,15 @@ control:
       memory: 256Mi
     limits:
       memory: 1Gi
+  replicas: 1
   artifacts:
     size: 10Gi
     storageClass: ""
+    s3:
+      bucket: ""
+      endpoint: ""
+      region: ""
+      existingSecret: ""
 docs:
   enabled: true
   image:

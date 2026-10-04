@@ -1,3 +1,8 @@
+{{- $s3 := .Values.control.artifacts.s3 }}
+{{- if and (gt (int .Values.control.replicas) 1) .Values.runner.enabled }}
+{{- fail "control.replicas above 1 requires runner.enabled=false" }}
+{{- end }}
+{{- if not $s3.bucket }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -16,6 +21,7 @@ spec:
     requests:
       storage: {{ .Values.control.artifacts.size }}
 ---
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -23,9 +29,16 @@ metadata:
   labels:
     {{- include "reforge.labels" . | nindent 4 }}
 spec:
-  replicas: 1
+  replicas: {{ .Values.control.replicas }}
   strategy:
+    {{- if $s3.bucket }}
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    {{- else }}
     type: Recreate
+    {{- end }}
   selector:
     matchLabels:
       app.kubernetes.io/instance: {{ .Release.Name }}
@@ -162,6 +175,24 @@ spec:
               value: /github-app/webhook-secret
             {{- end }}
             {{- end }}
+            {{- if $s3.bucket }}
+            - name: REFORGE_ARTIFACT_S3_BUCKET
+              value: {{ $s3.bucket | quote }}
+            - name: REFORGE_ARTIFACT_S3_ENDPOINT
+              value: {{ $s3.endpoint | quote }}
+            - name: REFORGE_ARTIFACT_S3_REGION
+              value: {{ $s3.region | quote }}
+            - name: REFORGE_ARTIFACT_S3_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "control.artifacts.s3.existingSecret is required" $s3.existingSecret }}
+                  key: access-key-id
+            - name: REFORGE_ARTIFACT_S3_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $s3.existingSecret }}
+                  key: secret-access-key
+            {{- end }}
             {{- with .Values.smtp }}
             {{- if .address }}
             - name: REFORGE_SMTP_ADDRESS
@@ -190,8 +221,10 @@ spec:
           securityContext:
             {{- include "reforge.securityContext" . | nindent 12 }}
           volumeMounts:
+            {{- if not $s3.bucket }}
             - name: artifacts
               mountPath: /app/var/artifacts
+            {{- end }}
             - name: control-tmp
               mountPath: /tmp
             - name: database
@@ -280,9 +313,11 @@ spec:
             {{- toYaml .Values.runner.resources | nindent 12 }}
         {{- end }}
       volumes:
+        {{- if not $s3.bucket }}
         - name: artifacts
           persistentVolumeClaim:
             claimName: {{ include "reforge.fullname" . }}-artifacts
+        {{- end }}
         - name: control-tmp
           emptyDir:
             sizeLimit: 256Mi

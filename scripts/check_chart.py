@@ -100,6 +100,15 @@ class ChartTests(unittest.TestCase):
             self.assertEqual(pod["nodeSelector"], {"kubernetes.io/arch": "amd64", "pool": "automation"})
             self.assertEqual(pod["tolerations"][0]["key"], "automation")
 
+    def test_s3_artifacts_roll_without_volume(self):
+        _, resources = render({"control": {"artifacts": {"s3": {"bucket": "artifacts", "endpoint": "http://garage:3900", "existingSecret": "s3"}}}})
+        self.assertFalse([item for item in resources if item["kind"] == "PersistentVolumeClaim" and item["metadata"]["name"] == "verify-artifacts"])
+        control = resource(resources, "Deployment", "-control")
+        self.assertEqual(control["spec"]["strategy"], {"type": "RollingUpdate", "rollingUpdate": {"maxSurge": 1, "maxUnavailable": 0}})
+        env = {item["name"] for item in control["spec"]["template"]["spec"]["containers"][0]["env"]}
+        self.assertTrue({"REFORGE_ARTIFACT_S3_BUCKET", "REFORGE_ARTIFACT_S3_ACCESS_KEY_ID", "REFORGE_ARTIFACT_S3_SECRET_ACCESS_KEY"} <= env)
+        self.assertNotEqual(render({"control": {"replicas": 2}}, expect_success=False).returncode, 0)
+
     def test_workspace_rbac_network_and_runtime_configuration(self):
         _, resources = render()
         config = json.loads(resource(resources, "ConfigMap", "-runner")["data"]["runtime.json"])
