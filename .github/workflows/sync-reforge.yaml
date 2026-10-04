@@ -38,7 +38,7 @@ jobs:
           fi
           echo 'changed=true' >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          for image in go javascript python; do
+          for image in go javascript python maintenance; do
             digest="$(docker buildx imagetools inspect "ghcr.io/reforgeapp/reforge-workspace-$image:$version" --format '{{json .Manifest}}' | jq -r '.digest')"
             if ! printf '%s' "$digest" | grep -Eq '^sha256:[0-9a-f]{64}$'; then
               echo "Invalid digest for $image" >&2
@@ -52,7 +52,8 @@ jobs:
           GO_DIGEST: ${{ steps.release.outputs.go_digest }}
           JAVASCRIPT_DIGEST: ${{ steps.release.outputs.javascript_digest }}
           PYTHON_DIGEST: ${{ steps.release.outputs.python_digest }}
-        run: python scripts/sync_reforge_release.py "$VERSION" "$GO_DIGEST" "$JAVASCRIPT_DIGEST" "$PYTHON_DIGEST"
+          MAINTENANCE_DIGEST: ${{ steps.release.outputs.maintenance_digest }}
+        run: python scripts/sync_reforge_release.py "$VERSION" "$GO_DIGEST" "$JAVASCRIPT_DIGEST" "$PYTHON_DIGEST" "$MAINTENANCE_DIGEST"
       - if: steps.release.outputs.changed == 'true'
         run: python -m pip install PyYAML==6.0.3
       - if: steps.release.outputs.changed == 'true'

@@ -111,6 +111,7 @@ runner:
       go: ghcr.io/reforgeapp/reforge-workspace-go@sha256:a5a92004b2357add8b8459e78496a4be86c41a26df7426250fc2c98d95402dc6
       javascript: ghcr.io/reforgeapp/reforge-workspace-javascript@sha256:0c94fe41d47ee3fdde452a4280cc21aa66f32c15408c5b061d283700c73cf3c7
       python: ghcr.io/reforgeapp/reforge-workspace-python@sha256:416b34163d912d190e08da470eb73e3a7d10d34361e64fe01f03b0b9fbf42812
+      maintenance: ghcr.io/reforgeapp/reforge-workspace-maintenance@sha256:5b675ebeef904bb184f11f2791bd6375e690bbacf564fc8a1e83b6805b3e29dc
 control:
   binary: /app/reforge
   extraEnv: []

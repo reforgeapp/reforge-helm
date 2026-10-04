@@ -5,6 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
 DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
+IMAGES = ("go", "javascript", "python", "maintenance")
 
 
 def replace_once(text, pattern, replacement):
@@ -18,7 +19,7 @@ def sync(version, digests, root=ROOT):
     match = VERSION.fullmatch(version)
     if not match:
         raise ValueError("release version must be semantic versioning without a prefix")
-    if set(digests) != {"go", "javascript", "python"} or any(not DIGEST.fullmatch(value) for value in digests.values()):
+    if set(digests) != set(IMAGES) or any(not DIGEST.fullmatch(value) for value in digests.values()):
         raise ValueError("workspace image digests must be complete SHA-256 values")
     chart_path = root / "charts/reforge/Chart.yaml"
     values_path = root / "charts/reforge/values.yaml"
@@ -45,9 +46,9 @@ def sync(version, digests, root=ROOT):
 
 
 def main():
-    if len(sys.argv) != 5:
-        raise SystemExit("usage: sync_reforge_release.py VERSION GO_DIGEST JAVASCRIPT_DIGEST PYTHON_DIGEST")
-    chart_version = sync(sys.argv[1], dict(zip(("go", "javascript", "python"), sys.argv[2:])))
+    if len(sys.argv) != 2 + len(IMAGES):
+        raise SystemExit("usage: sync_reforge_release.py VERSION GO_DIGEST JAVASCRIPT_DIGEST PYTHON_DIGEST MAINTENANCE_DIGEST")
+    chart_version = sync(sys.argv[1], dict(zip(IMAGES, sys.argv[2:])))
     if chart_version:
         print(chart_version)
 
