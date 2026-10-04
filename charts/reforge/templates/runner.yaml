@@ -65,6 +65,120 @@ metadata:
 data:
   runtime.json: {{ include "reforge.runtimeConfig" . | quote }}
 ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "reforge.fullname" . }}-runner
+  labels:
+    {{- include "reforge.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: runner
+  template:
+    metadata:
+      annotations:
+        checksum/runner: {{ include "reforge.runtimeConfig" . | sha256sum }}
+      labels:
+        {{- include "reforge.labels" . | nindent 8 }}
+        app.kubernetes.io/component: runner
+    spec:
+      serviceAccountName: {{ include "reforge.fullname" . }}-runner
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        {{- include "reforge.builtinInit" . | nindent 8 }}
+      containers:
+        - name: runner
+          image: {{ include "reforge.runnerImage" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: [/app/reforge-runner]
+          args:
+            - builtin
+            - --endpoint
+            - http://{{ include "reforge.fullname" . }}-control
+            - --dir
+            - /builtin
+            - --state
+            - /var/lib/reforge-runner/data
+            - --slots
+            - {{ .Values.runner.slots | quote }}
+            - --runtime-config
+            - /builtin/runtime.json
+            {{- with .Values.runner.extraArgs }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          ports:
+            - name: registry-proxy
+              containerPort: 8086
+          env:
+            - name: REFORGE_PUBLIC_URL
+              value: {{ .Values.publicURL | quote }}
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          securityContext:
+            runAsUser: 10002
+            {{- include "reforge.securityContext" . | nindent 12 }}
+          volumeMounts:
+            - name: builtin
+              mountPath: /builtin
+              readOnly: true
+            - name: runner-state
+              mountPath: /var/lib/reforge-runner
+            - name: runner-api
+              mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+              readOnly: true
+            - name: runner-tmp
+              mountPath: /tmp
+          resources:
+            {{- toYaml .Values.runner.resources | nindent 12 }}
+      volumes:
+        {{- include "reforge.builtinVolumes" . | nindent 8 }}
+        - name: runner-api
+          projected:
+            defaultMode: 0440
+            sources:
+              - serviceAccountToken:
+                  path: token
+                  expirationSeconds: 3600
+              - configMap:
+                  name: kube-root-ca.crt
+                  items:
+                    - key: ca.crt
+                      path: ca.crt
+        - name: runner-state
+          emptyDir:
+            sizeLimit: {{ .Values.runner.stateSizeLimit }}
+        - name: runner-tmp
+          emptyDir:
+            sizeLimit: 1Gi
+---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -96,7 +210,7 @@ spec:
           podSelector:
             matchLabels:
               app.kubernetes.io/instance: {{ .Release.Name }}
-              app.kubernetes.io/component: control
+              app.kubernetes.io/component: runner
       ports:
         - protocol: TCP
           port: 8086
@@ -112,7 +226,7 @@ spec:
   podSelector:
     matchLabels:
       app.kubernetes.io/instance: {{ .Release.Name }}
-      app.kubernetes.io/component: control
+      app.kubernetes.io/component: runner
   policyTypes: [Ingress]
   ingress:
     - from:

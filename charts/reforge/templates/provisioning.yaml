@@ -11,6 +11,9 @@
 {{- if and .Values.authentik.enabled (not .Values.authentik.existingSecret) -}}
 {{- $secrets = append $secrets (dict "name" (include "reforge.authentikSecret" .) "kind" "authentik") -}}
 {{- end -}}
+{{- if .Values.runner.enabled -}}
+{{- $secrets = append $secrets (dict "name" (include "reforge.builtinRunnerSecret" .) "kind" "builtin-runner") -}}
+{{- end -}}
 {{- if $secrets }}
 apiVersion: v1
 kind: ServiceAccount

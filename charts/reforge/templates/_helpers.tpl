@@ -22,6 +22,57 @@ helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | quote }}
 {{- define "reforge.staffSecret" -}}
 {{ printf "%s-staff-database" (include "reforge.fullname" .) }}
 {{- end -}}
+{{- define "reforge.builtinRunnerSecret" -}}
+{{ printf "%s-builtin-runner" (include "reforge.fullname" .) }}
+{{- end -}}
+{{- define "reforge.builtinInit" -}}
+- name: builtin-init
+  image: {{ include "reforge.runnerImage" . | quote }}
+  imagePullPolicy: {{ .Values.image.pullPolicy }}
+  command: [/bin/sh, -ec]
+  args:
+    - |
+      cp /runtime-source/runtime.json /builtin/runtime.json
+      cp /builtin-secret/token /builtin/token
+      chmod 0640 /builtin/runtime.json /builtin/token
+      exec /app/reforge-runner builtin-init --dir /builtin --runtime-config /builtin/runtime.json
+  env:
+    - name: POD_IP
+      valueFrom:
+        fieldRef:
+          fieldPath: status.podIP
+  securityContext:
+    runAsUser: 10002
+    {{- include "reforge.securityContext" . | nindent 4 }}
+  volumeMounts:
+    - name: builtin
+      mountPath: /builtin
+    - name: runtime-source
+      mountPath: /runtime-source
+      readOnly: true
+    - name: builtin-secret
+      mountPath: /builtin-secret
+      readOnly: true
+  resources:
+    requests:
+      cpu: 100m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+{{- end -}}
+{{- define "reforge.builtinVolumes" -}}
+- name: builtin
+  emptyDir:
+    medium: Memory
+    sizeLimit: 1Mi
+- name: runtime-source
+  configMap:
+    name: {{ include "reforge.fullname" . }}-runner
+- name: builtin-secret
+  secret:
+    secretName: {{ include "reforge.builtinRunnerSecret" . }}
+    defaultMode: 0440
+{{- end -}}
 {{- define "reforge.authentikSecret" -}}
 {{ default (printf "%s-authentik" (include "reforge.fullname" .)) .Values.authentik.existingSecret }}
 {{- end -}}

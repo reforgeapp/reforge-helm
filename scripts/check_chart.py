@@ -38,14 +38,15 @@ class ChartTests(unittest.TestCase):
         self.assertFalse(any(item["kind"] == "Secret" for item in resources))
         config = resource(resources, "ConfigMap", "-provision")
         generated = json.loads(config["data"]["config.json"])["secrets"]
-        self.assertEqual({item["kind"] for item in generated}, {"app", "database", "authentik"})
+        self.assertEqual({item["kind"] for item in generated}, {"app", "database", "authentik", "builtin-runner"})
         pod = resource(resources, "Deployment", "-control")["spec"]["template"]["spec"]
         self.assertFalse(pod["automountServiceAccountToken"])
         self.assertNotIn("hostNetwork", pod)
         self.assertTrue(all("hostPath" not in volume for volume in pod["volumes"]))
-        runner = next(item for item in pod["containers"] if item["name"] == "runner")
-        self.assertEqual(runner["securityContext"]["runAsUser"], 10002)
-        for container in pod["containers"]:
+        runner_pod = resource(resources, "Deployment", "-runner")["spec"]["template"]["spec"]
+        self.assertFalse(runner_pod["automountServiceAccountToken"])
+        self.assertEqual(runner_pod["containers"][0]["securityContext"]["runAsUser"], 10002)
+        for container in pod["containers"] + runner_pod["containers"]:
             security = container["securityContext"]
             self.assertFalse(security.get("privileged", False))
             self.assertFalse(security["allowPrivilegeEscalation"])
@@ -86,7 +87,7 @@ class ChartTests(unittest.TestCase):
             "tolerations": [{"key": "automation", "operator": "Exists", "effect": "NoSchedule"}],
         })
         generated = json.loads(resource(resources, "ConfigMap", "-provision")["data"]["config.json"])["secrets"]
-        self.assertEqual(generated, [{"kind": "database", "name": "verify-database"}])
+        self.assertEqual(generated, [{"kind": "database", "name": "verify-database"}, {"kind": "builtin-runner", "name": "verify-builtin-runner"}])
         for suffix, host in [("", "app.example.com"), ("-authentik", "login.example.com")]:
             ingress = resource(resources, "Ingress", suffix)
             self.assertEqual(ingress["spec"]["rules"][0]["host"], host)
@@ -107,7 +108,12 @@ class ChartTests(unittest.TestCase):
         self.assertEqual(control["spec"]["strategy"], {"type": "RollingUpdate", "rollingUpdate": {"maxSurge": 1, "maxUnavailable": 0}})
         env = {item["name"] for item in control["spec"]["template"]["spec"]["containers"][0]["env"]}
         self.assertTrue({"REFORGE_ARTIFACT_S3_BUCKET", "REFORGE_ARTIFACT_S3_ACCESS_KEY_ID", "REFORGE_ARTIFACT_S3_SECRET_ACCESS_KEY"} <= env)
-        self.assertNotEqual(render({"control": {"replicas": 2}}, expect_success=False).returncode, 0)
+        _, scaled = render({"control": {"replicas": 2}})
+        self.assertEqual(resource(scaled, "Deployment", "-control")["spec"]["replicas"], 2)
+        self.assertEqual([c["name"] for c in resource(scaled, "Deployment", "-control")["spec"]["template"]["spec"]["containers"]], ["control"])
+        runner = resource(scaled, "Deployment", "-runner")
+        self.assertEqual((runner["spec"]["replicas"], runner["spec"]["strategy"]["type"]), (1, "Recreate"))
+        self.assertIn("http://verify-control", runner["spec"]["template"]["spec"]["containers"][0]["args"])
 
     def test_workspace_rbac_network_and_runtime_configuration(self):
         _, resources = render()

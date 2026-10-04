@@ -73,6 +73,7 @@ REQUIRED_KEYS = {
     "database": ("admin-password", "migrator-password", "runtime-password"),
     "staff": ("password",),
     "authentik": ("secret-key", "bootstrap-password", "database-password", "client-secret"),
+    "builtin-runner": ("token",),
 }
 
 
@@ -109,6 +110,8 @@ def generate_values(kind, ttl_hours, now):
             "database-password": secrets.token_hex(32),
             "client-secret": secrets.token_hex(32),
         }
+    if kind == "builtin-runner":
+        return {"token": secrets.token_urlsafe(32)}
     raise ProvisioningError("Unknown Secret kind in configuration.")
 
 
