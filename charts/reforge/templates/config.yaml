@@ -22,7 +22,7 @@ data:
   REFORGE_EDITION: {{ include "reforge.edition" . }}
   REFORGE_ARTIFACT_DIRECTORY: /app/var/artifacts/data
   REFORGE_ENCRYPTION_KEY_ID: primary
-  REFORGE_REPAIR_IMAGES: {{ include "reforge.toolchains" . | quote }}
+  REFORGE_REPAIR_IMAGES: {{ omit (include "reforge.toolchains" . | fromJson) "maintenance" | toJson | quote }}
   REFORGE_DOCS_URL: {{ ternary "/docs/" "" .Values.docs.enabled | quote }}
   REFORGE_OIDC_ISSUER: {{ include "reforge.oidcIssuer" . | quote }}
   REFORGE_OIDC_CLIENT_ID: {{ .Values.oidc.clientID | quote }}

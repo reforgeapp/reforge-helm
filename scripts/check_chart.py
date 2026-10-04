@@ -109,6 +109,8 @@ class ChartTests(unittest.TestCase):
         self.assertNotEqual(namespace, "verify")
         for digest in config["kubernetes"]["toolchains"].values():
             self.assertTrue(config["kubernetes"]["images"][digest].endswith("@" + digest))
+        self.assertIn("maintenance", config["kubernetes"]["toolchains"])
+        self.assertEqual(set(json.loads(resource(resources, "ConfigMap", "-config")["data"]["REFORGE_REPAIR_IMAGES"])), {"go", "javascript", "python"})
         role = resource(resources, "Role", "-runner")
         self.assertEqual(role["metadata"]["namespace"], namespace)
         self.assertEqual(role["rules"], [
