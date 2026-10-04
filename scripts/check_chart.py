@@ -116,6 +116,8 @@ class ChartTests(unittest.TestCase):
         runner = resource(scaled, "Deployment", "-runner")
         self.assertEqual((runner["spec"]["replicas"], runner["spec"]["strategy"]["type"]), (1, "Recreate"))
         self.assertIn("http://verify-control", runner["spec"]["template"]["spec"]["containers"][0]["args"])
+        self.assertIn("1200s", runner["spec"]["template"]["spec"]["containers"][0]["args"])
+        self.assertEqual(runner["spec"]["template"]["spec"]["terminationGracePeriodSeconds"], 1260)
 
     def test_workspace_rbac_network_and_runtime_configuration(self):
         _, resources = render()

@@ -91,6 +91,7 @@ runner:
     repository: ghcr.io/reforgeapp/reforge-runner
     tag: ""
   slots: 1
+  drainTimeoutSeconds: 1200
   extraArgs: []
   resources:
     requests:

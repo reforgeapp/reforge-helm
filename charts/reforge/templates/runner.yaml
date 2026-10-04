@@ -89,7 +89,7 @@ spec:
     spec:
       serviceAccountName: {{ include "reforge.fullname" . }}-runner
       automountServiceAccountToken: false
-      terminationGracePeriodSeconds: 60
+      terminationGracePeriodSeconds: {{ add .Values.runner.drainTimeoutSeconds 60 }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -127,6 +127,8 @@ spec:
             - /var/lib/reforge-runner/data
             - --slots
             - {{ .Values.runner.slots | quote }}
+            - --drain-timeout
+            - {{ printf "%ds" (int .Values.runner.drainTimeoutSeconds) | quote }}
             - --runtime-config
             - /builtin/runtime.json
             {{- with .Values.runner.extraArgs }}
