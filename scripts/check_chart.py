@@ -136,7 +136,12 @@ class ChartTests(unittest.TestCase):
         self.assertEqual(role["rules"], [
             {"apiGroups": [""], "resources": ["pods"], "verbs": ["create", "get", "list", "delete"]},
             {"apiGroups": [""], "resources": ["pods/exec"], "verbs": ["create", "get"]},
+            {"apiGroups": [""], "resources": ["persistentvolumeclaims"], "verbs": ["create", "get"]},
         ])
+        self.assertNotIn("cache_bytes", config["kubernetes"])
+        _, cached = render({"runner": {"kubernetes": {"cache": {"bytes": 10737418240, "storageClass": "px-pool-rwx", "accessMode": "ReadWriteMany"}}}})
+        cache = json.loads(resource(cached, "ConfigMap", "-runner")["data"]["runtime.json"])["kubernetes"]
+        self.assertEqual((cache["cache_bytes"], cache["cache_storage_class"], cache["cache_access_mode"]), (10737418240, "px-pool-rwx", "ReadWriteMany"))
         pod = resource(resources, "Deployment", "-control")["spec"]["template"]["spec"]
         for container in pod["initContainers"] + pod["containers"]:
             volumes = {mount["name"] for mount in container.get("volumeMounts", [])}

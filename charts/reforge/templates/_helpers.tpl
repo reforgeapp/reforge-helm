@@ -143,6 +143,13 @@ capabilities:
 {{- $_ := set $images (last (splitList "@" $image)) $image -}}
 {{- end -}}
 {{- $kubernetes := dict "namespace" (include "reforge.workspaceNamespace" .) "runtime_class_name" .Values.runner.kubernetes.runtimeClassName "image_pull_secrets" .Values.runner.kubernetes.imagePullSecrets "images" $images "toolchains" (include "reforge.toolchains" . | fromJson) "broker_listen_address" "0.0.0.0:8086" -}}
+{{- with .Values.runner.kubernetes.cache }}
+{{- if .bytes }}
+{{- $_ := set $kubernetes "cache_bytes" (int64 .bytes) }}
+{{- $_ := set $kubernetes "cache_access_mode" .accessMode }}
+{{- if .storageClass }}{{ $_ := set $kubernetes "cache_storage_class" .storageClass }}{{ end }}
+{{- end }}
+{{- end }}
 {{- dict "backend" "kubernetes" "kubernetes" $kubernetes "memory_bytes" .Values.runner.kubernetes.memoryBytes "disk_bytes" .Values.runner.kubernetes.diskBytes "cpus" .Values.runner.kubernetes.cpus "max_processes" 0 | toJson -}}
 {{- end -}}
 

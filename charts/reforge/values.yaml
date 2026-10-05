@@ -108,6 +108,10 @@ runner:
     memoryBytes: 6442450944
     diskBytes: 3221225472
     cpus: 2
+    cache:
+      bytes: 0
+      storageClass: ""
+      accessMode: ReadWriteOnce
     images:
       go: ghcr.io/reforgeapp/reforge-workspace-go@sha256:b4c984112cba8161ff25dd51adc73ff3100da2679b17221633070576f6d39e59
       javascript: ghcr.io/reforgeapp/reforge-workspace-javascript@sha256:da835f7ca1995fcb28fc1afd3af70c30c5c04af421249a685524d99f22f79bb2
