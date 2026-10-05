@@ -110,6 +110,7 @@ class ChartTests(unittest.TestCase):
         self.assertTrue({"REFORGE_ARTIFACT_S3_BUCKET", "REFORGE_ARTIFACT_S3_ACCESS_KEY_ID", "REFORGE_ARTIFACT_S3_SECRET_ACCESS_KEY"} <= env)
         _, scaled = render({"control": {"replicas": 2}})
         self.assertEqual(resource(scaled, "Deployment", "-control")["spec"]["replicas"], 2)
+        self.assertEqual(resource(scaled, "Deployment", "-control")["spec"]["template"]["spec"]["terminationGracePeriodSeconds"], 690)
         self.assertEqual([c["name"] for c in resource(scaled, "Deployment", "-control")["spec"]["template"]["spec"]["containers"]], ["control"])
         env = {item["name"]: item.get("value") for item in resource(scaled, "Deployment", "-control")["spec"]["template"]["spec"]["containers"][0]["env"]}
         self.assertEqual(env["REFORGE_POD_ADDRESS"], "$(POD_IP):8080")

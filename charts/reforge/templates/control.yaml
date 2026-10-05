@@ -53,7 +53,7 @@ spec:
     spec:
       serviceAccountName: {{ include "reforge.fullname" . }}
       automountServiceAccountToken: false
-      terminationGracePeriodSeconds: 60
+      terminationGracePeriodSeconds: 690
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
