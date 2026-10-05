@@ -2,8 +2,8 @@ apiVersion: v2
 name: reforge
 description: Repository automation with bundled identity, database, and runner
 type: application
-version: 0.1.49
-appVersion: "0.2.29"
+version: 0.1.50
+appVersion: "0.2.30"
 kubeVersion: ">=1.31.0-0"
 home: https://github.com/reforgeapp/reforge
 sources:
