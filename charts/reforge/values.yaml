@@ -109,10 +109,10 @@ runner:
     diskBytes: 3221225472
     cpus: 2
     images:
-      go: ghcr.io/reforgeapp/reforge-workspace-go@sha256:47ec3be77f13439ef4bbf6d7f9dd7d249d2210adc44089e34a0ca0161643b6b1
-      javascript: ghcr.io/reforgeapp/reforge-workspace-javascript@sha256:2d5695747d78cd504b7932482f4f235dcb36e727a52bdc35ced1eb6111709d85
-      python: ghcr.io/reforgeapp/reforge-workspace-python@sha256:b2023b968dd53b51d3605e30713f36d88f18bdfbd9cb070b3e235ed293806421
-      maintenance: ghcr.io/reforgeapp/reforge-workspace-maintenance@sha256:d4447da2df471adcdee2d78d244b84cd065e676dc1a6b39b84804a79d622ddac
+      go: ghcr.io/reforgeapp/reforge-workspace-go@sha256:562b7c238315b772459f3d83f9d6cad5a060d14c565e5e443cec10af8dc1028c
+      javascript: ghcr.io/reforgeapp/reforge-workspace-javascript@sha256:8f4d71da0a561d9d7377cc191b9cfa95b7d51bf1718c2b8961967061be69105d
+      python: ghcr.io/reforgeapp/reforge-workspace-python@sha256:40988dc9f1bcf67e23501c3be05ab1f07448b8e4add743d12ba7a3d5e9a61f74
+      maintenance: ghcr.io/reforgeapp/reforge-workspace-maintenance@sha256:9c6c0569ffa8846546b8d58466f0693e08b27bca74eb8db3680d04824f9536ba
 control:
   binary: /app/reforge
   extraEnv: []
