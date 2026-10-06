@@ -113,7 +113,7 @@ class ChartTests(unittest.TestCase):
         self.assertEqual(role["metadata"]["namespace"], namespace)
         self.assertEqual(role["rules"], [
             {"apiGroups": [""], "resources": ["pods"], "verbs": ["create", "get", "list", "delete"]},
-            {"apiGroups": [""], "resources": ["pods/exec"], "verbs": ["get"]},
+            {"apiGroups": [""], "resources": ["pods/exec"], "verbs": ["create", "get"]},
         ])
         pod = resource(resources, "Deployment", "-control")["spec"]["template"]["spec"]
         for container in pod["initContainers"] + pod["containers"]:
