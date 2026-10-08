@@ -66,6 +66,11 @@ authentik:
       memory: 512Mi
     limits:
       memory: 1Gi
+smtp:
+  address: ""
+  from: ""
+  username: ""
+  existingSecret: ""
 oidc:
   issuer: ""
   clientID: reforge

@@ -140,6 +140,23 @@ spec:
             - name: REFORGE_BUILTIN_RUNNER_DIR
               value: /builtin
             {{- end }}
+            {{- with .Values.smtp }}
+            {{- if .address }}
+            - name: REFORGE_SMTP_ADDRESS
+              value: {{ .address | quote }}
+            - name: REFORGE_SMTP_FROM
+              value: {{ required "smtp.from is required when smtp.address is set" .from | quote }}
+            - name: REFORGE_SMTP_USERNAME
+              value: {{ .username | quote }}
+            {{- if .existingSecret }}
+            - name: REFORGE_SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .existingSecret }}
+                  key: password
+            {{- end }}
+            {{- end }}
+            {{- end }}
           securityContext:
             {{- include "reforge.securityContext" . | nindent 12 }}
           volumeMounts:
