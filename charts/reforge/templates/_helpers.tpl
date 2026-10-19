@@ -143,6 +143,9 @@ capabilities:
 {{- $_ := set $images (last (splitList "@" $image)) $image -}}
 {{- end -}}
 {{- $kubernetes := dict "namespace" (include "reforge.workspaceNamespace" .) "runtime_class_name" .Values.runner.kubernetes.runtimeClassName "image_pull_secrets" .Values.runner.kubernetes.imagePullSecrets "images" $images "toolchains" (include "reforge.toolchains" . | fromJson) "broker_listen_address" "0.0.0.0:8086" -}}
+{{- if and .Values.runner.kubernetes.agentImage .Values.runner.kubernetes.runtimeClassName }}
+{{- $_ := set $kubernetes "agent_image" .Values.runner.kubernetes.agentImage }}
+{{- end }}
 {{- with .Values.runner.kubernetes.cache }}
 {{- if .bytes }}
 {{- $_ := set $kubernetes "cache_bytes" (int64 .bytes) }}

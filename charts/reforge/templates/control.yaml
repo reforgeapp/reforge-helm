@@ -128,6 +128,10 @@ spec:
                   key: bootstrap-expires-at
             {{- end }}
             {{- if .Values.runner.enabled }}
+            {{- if and .Values.runner.kubernetes.agentImage .Values.runner.kubernetes.runtimeClassName }}
+            - name: REFORGE_NATIVE_AGENTS
+              value: "true"
+            {{- end }}
             - name: REFORGE_BUILTIN_RUNNER_DIR
               value: /builtin
             {{- end }}

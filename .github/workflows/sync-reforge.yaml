@@ -46,14 +46,18 @@ jobs:
             fi
             echo "${image}_digest=$digest" >> "$GITHUB_OUTPUT"
           done
+          digest="$(docker buildx imagetools inspect "ghcr.io/reforgeapp/reforge-agent:$version" --format '{{json .Manifest}}' | jq -r '.digest')"
+          if ! printf '%s' "$digest" | grep -Eq '^sha256:[0-9a-f]{64}$'; then exit 1; fi
+          echo "agent_digest=$digest" >> "$GITHUB_OUTPUT"
       - if: steps.release.outputs.changed == 'true'
         env:
           VERSION: ${{ steps.release.outputs.version }}
           GO_DIGEST: ${{ steps.release.outputs.go_digest }}
           JAVASCRIPT_DIGEST: ${{ steps.release.outputs.javascript_digest }}
           PYTHON_DIGEST: ${{ steps.release.outputs.python_digest }}
+          AGENT_DIGEST: ${{ steps.release.outputs.agent_digest }}
           MAINTENANCE_DIGEST: ${{ steps.release.outputs.maintenance_digest }}
-        run: python scripts/sync_reforge_release.py "$VERSION" "$GO_DIGEST" "$JAVASCRIPT_DIGEST" "$PYTHON_DIGEST" "$MAINTENANCE_DIGEST"
+        run: python scripts/sync_reforge_release.py "$VERSION" "$GO_DIGEST" "$JAVASCRIPT_DIGEST" "$PYTHON_DIGEST" "$MAINTENANCE_DIGEST" "$AGENT_DIGEST"
       - if: steps.release.outputs.changed == 'true'
         run: python -m pip install PyYAML==6.0.3
       - if: steps.release.outputs.changed == 'true'

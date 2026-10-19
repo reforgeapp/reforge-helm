@@ -164,6 +164,29 @@ class ChartTests(unittest.TestCase):
         names = {item["metadata"]["name"] for item in no_app_policy if item["kind"] == "NetworkPolicy"}
         self.assertEqual(names, {"verify-workspace-deny", "verify-workspace-registry"})
 
+    def test_native_agents_are_isolated_and_opt_in(self):
+        image = "ghcr.io/reforgeapp/reforge-agent@sha256:" + "a" * 64
+        _, resources = render({"runner": {"kubernetes": {"agentImage": image, "runtimeClassName": "gvisor"}}})
+        config = json.loads(resource(resources, "ConfigMap", "-runner")["data"]["runtime.json"])["kubernetes"]
+        self.assertEqual(config["agent_image"], image)
+        self.assertNotIn(image, config["images"].values())
+        role = resource(resources, "Role", "-runner")
+        self.assertIn("delete", role["rules"][2]["verbs"])
+        agent = resource(resources, "NetworkPolicy", "-agent-provider")["spec"]
+        self.assertEqual(agent["podSelector"]["matchLabels"], {"app.kubernetes.io/name": "reforge-agent"})
+        self.assertEqual(agent["egress"][1]["ports"], [{"protocol": "TCP", "port": 443}])
+        denied = agent["egress"][1]["to"][0]["ipBlock"]["except"]
+        self.assertIn("169.254.0.0/16", denied)
+        self.assertIn("10.0.0.0/8", denied)
+        self.assertEqual(
+            agent["egress"][2],
+            {"to": [{"ipBlock": {"cidr": "2000::/3", "except": ["2001:db8::/32"]}}], "ports": [{"protocol": "TCP", "port": 443}]},
+        )
+        workspace = resource(resources, "NetworkPolicy", "-workspace-registry")["spec"]
+        self.assertEqual(workspace["egress"][0]["ports"], [{"protocol": "TCP", "port": 8086}])
+        _, disabled = render({"runner": {"kubernetes": {"agentImage": image}}})
+        self.assertFalse(any(item["kind"] == "NetworkPolicy" and item["metadata"]["name"].endswith("-agent-provider") for item in disabled))
+
     def test_unsafe_or_incomplete_values_fail_before_install(self):
         cases = [
             {"publicURL": "http://app.example.com"},

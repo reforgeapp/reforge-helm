@@ -112,6 +112,7 @@ runner:
       bytes: 0
       storageClass: ""
       accessMode: ReadWriteOnce
+    agentImage: ""
     images:
       go: ghcr.io/reforgeapp/reforge-workspace-go@sha256:3f143decaa166a62495f2ce7f9cd0df7961a9a6fe48da3a4d686c59aaf863010
       javascript: ghcr.io/reforgeapp/reforge-workspace-javascript@sha256:9492e2f1dc85ae8e4cca4f0b43449dd00ba5164948183f1085bfe9ff5de83795

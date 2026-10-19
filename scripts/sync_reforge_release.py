@@ -5,7 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
 DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
-IMAGES = ("go", "javascript", "python", "maintenance")
+IMAGES = ("go", "javascript", "python", "maintenance", "agent")
 
 
 def replace_once(text, pattern, replacement):
@@ -39,6 +39,9 @@ def sync(version, digests, root=ROOT):
     chart = replace_once(chart, r'^appVersion: "[0-9]+\.[0-9]+\.[0-9]+"$', f'appVersion: "{version}"')
     values = values_path.read_text()
     for name, digest in digests.items():
+        if name == "agent":
+            values = replace_once(values, r'^    agentImage:.*$', f'    agentImage: ghcr.io/reforgeapp/reforge-agent@{digest}')
+            continue
         values = replace_once(values, rf"^(      {name}: ghcr\.io/reforgeapp/reforge-workspace-{name}@)sha256:[0-9a-f]{{64}}$", rf"\g<1>{digest}")
     chart_path.write_text(chart)
     values_path.write_text(values)
@@ -47,7 +50,7 @@ def sync(version, digests, root=ROOT):
 
 def main():
     if len(sys.argv) != 2 + len(IMAGES):
-        raise SystemExit("usage: sync_reforge_release.py VERSION GO_DIGEST JAVASCRIPT_DIGEST PYTHON_DIGEST MAINTENANCE_DIGEST")
+        raise SystemExit("usage: sync_reforge_release.py VERSION GO_DIGEST JAVASCRIPT_DIGEST PYTHON_DIGEST MAINTENANCE_DIGEST AGENT_DIGEST")
     chart_version = sync(sys.argv[1], dict(zip(IMAGES, sys.argv[2:])))
     if chart_version:
         print(chart_version)
