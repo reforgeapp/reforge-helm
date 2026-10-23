@@ -2,6 +2,20 @@ apiVersion: v1
 entries:
   reforge:
   - apiVersion: v2
+    appVersion: 0.2.57
+    created: "2026-10-23T13:23:18.2363851Z"
+    description: Repository automation with bundled identity, database, and runner
+    digest: 6a962661b3c963640ec9dde86dfd1258c402b0c95b76f05584e5975a3bb2fd4a
+    home: https://github.com/reforgeapp/reforge
+    kubeVersion: '>=1.31.0-0'
+    name: reforge
+    sources:
+    - https://github.com/reforgeapp/reforge-helm
+    type: application
+    urls:
+    - https://github.com/reforgeapp/reforge-helm/releases/download/reforge-0.1.78/reforge-0.1.78.tgz
+    version: 0.1.78
+  - apiVersion: v2
     appVersion: 0.2.56
     created: "2026-10-23T08:51:06.26645999Z"
     description: Repository automation with bundled identity, database, and runner
@@ -1079,4 +1093,4 @@ entries:
     urls:
     - https://github.com/reforgeapp/reforge-helm/releases/download/reforge-0.1.1/reforge-0.1.1.tgz
     version: 0.1.1
-generated: "2026-10-23T08:51:06.26673935Z"
+generated: "2026-10-23T13:23:18.236712293Z"
