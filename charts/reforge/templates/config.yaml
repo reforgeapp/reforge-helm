@@ -19,7 +19,7 @@ metadata:
 data:
   REFORGE_ADDRESS: 0.0.0.0:8080
   REFORGE_PUBLIC_URL: {{ .Values.publicURL | quote }}
-  REFORGE_EDITION: self-hosted
+  REFORGE_EDITION: {{ include "reforge.edition" . }}
   REFORGE_ARTIFACT_DIRECTORY: /app/var/artifacts/data
   REFORGE_ENCRYPTION_KEY_ID: primary
   REFORGE_REPAIR_IMAGES: {{ include "reforge.toolchains" . | quote }}

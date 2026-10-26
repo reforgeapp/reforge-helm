@@ -106,7 +106,7 @@ spec:
             - |
               . /database/runtime.env
               export REFORGE_DATABASE_URL
-              exec /app/reforge
+              exec {{ .Values.control.binary }}
           ports:
             - name: http
               containerPort: 8080
@@ -140,6 +140,22 @@ spec:
             - name: REFORGE_BUILTIN_RUNNER_DIR
               value: /builtin
             {{- end }}
+            {{- with .Values.githubApp }}
+            {{- if .existingSecret }}
+            - name: REFORGE_GITHUB_APP_ID
+              value: {{ required "githubApp.appID is required" .appID | quote }}
+            - name: REFORGE_GITHUB_APP_SLUG
+              value: {{ required "githubApp.slug is required" .slug | quote }}
+            - name: REFORGE_GITHUB_APP_CLIENT_ID
+              value: {{ required "githubApp.clientID is required" .clientID | quote }}
+            - name: REFORGE_GITHUB_APP_CLIENT_SECRET_FILE
+              value: /github-app/client-secret
+            - name: REFORGE_GITHUB_APP_PRIVATE_KEY_FILE
+              value: /github-app/private-key
+            - name: REFORGE_GITHUB_APP_WEBHOOK_SECRET_FILE
+              value: /github-app/webhook-secret
+            {{- end }}
+            {{- end }}
             {{- with .Values.smtp }}
             {{- if .address }}
             - name: REFORGE_SMTP_ADDRESS
@@ -148,6 +164,14 @@ spec:
               value: {{ required "smtp.from is required when smtp.address is set" .from | quote }}
             - name: REFORGE_SMTP_USERNAME
               value: {{ .username | quote }}
+            {{- if .security }}
+            - name: REFORGE_SMTP_SECURITY
+              value: {{ .security | quote }}
+            {{- end }}
+            {{- if .tlsServerName }}
+            - name: REFORGE_SMTP_TLS_SERVER_NAME
+              value: {{ .tlsServerName | quote }}
+            {{- end }}
             {{- if .existingSecret }}
             - name: REFORGE_SMTP_PASSWORD
               valueFrom:
@@ -175,6 +199,11 @@ spec:
             {{- if include "reforge.databaseCASecret" . }}
             - name: database-ca
               mountPath: /database-ca
+              readOnly: true
+            {{- end }}
+            {{- if .Values.githubApp.existingSecret }}
+            - name: github-app
+              mountPath: /github-app
               readOnly: true
             {{- end }}
           startupProbe:
@@ -269,6 +298,12 @@ spec:
             items:
               - key: ca.crt
                 path: ca.crt
+        {{- end }}
+        {{- if .Values.githubApp.existingSecret }}
+        - name: github-app
+          secret:
+            secretName: {{ .Values.githubApp.existingSecret }}
+            defaultMode: 0440
         {{- end }}
         {{- if .Values.runner.enabled }}
         - name: builtin

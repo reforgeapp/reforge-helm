@@ -91,3 +91,16 @@ capabilities:
 {{- $kubernetes := dict "namespace" (include "reforge.workspaceNamespace" .) "runtime_class_name" .Values.runner.kubernetes.runtimeClassName "image_pull_secrets" .Values.runner.kubernetes.imagePullSecrets "images" $images "toolchains" (include "reforge.toolchains" . | fromJson) "broker_listen_address" "0.0.0.0:8086" -}}
 {{- dict "backend" "kubernetes" "kubernetes" $kubernetes "memory_bytes" .Values.runner.kubernetes.memoryBytes "disk_bytes" .Values.runner.kubernetes.diskBytes "cpus" .Values.runner.kubernetes.cpus "max_processes" 0 | toJson -}}
 {{- end -}}
+
+{{- define "reforge.edition" -}}
+{{- if not (has .Values.edition (list "self-hosted" "hosted")) -}}
+{{- fail "edition must be self-hosted or hosted" -}}
+{{- end -}}
+{{- if and (eq .Values.edition "hosted") (or .Values.runner.enabled .Values.secrets.bootstrap.enabled) -}}
+{{- fail "edition=hosted requires runner.enabled=false and secrets.bootstrap.enabled=false" -}}
+{{- end -}}
+{{- if and .Values.githubApp.existingSecret (ne .Values.edition "hosted") -}}
+{{- fail "githubApp is only supported with edition=hosted" -}}
+{{- end -}}
+{{- .Values.edition -}}
+{{- end -}}

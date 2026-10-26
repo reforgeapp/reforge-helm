@@ -1,6 +1,7 @@
 nameOverride: ""
 fullnameOverride: ""
 publicURL: https://reforge.example.com
+edition: self-hosted
 image:
   repository: ghcr.io/reforgeapp/reforge
   tag: ""
@@ -71,6 +72,13 @@ smtp:
   from: ""
   username: ""
   existingSecret: ""
+  security: ""
+  tlsServerName: ""
+githubApp:
+  existingSecret: ""
+  appID: ""
+  slug: ""
+  clientID: ""
 oidc:
   issuer: ""
   clientID: reforge
@@ -102,6 +110,7 @@ runner:
       javascript: ghcr.io/reforgeapp/reforge-workspace-javascript@sha256:cdcbb0d4d99a87c14e577eb50296972615c5044d35fae810b8b53018999df10c
       python: ghcr.io/reforgeapp/reforge-workspace-python@sha256:b1a9e0d40dcba7e3a10756b35380bb4cec515b716222c1d242407848ddb46561
 control:
+  binary: /app/reforge
   resources:
     requests:
       cpu: 100m
