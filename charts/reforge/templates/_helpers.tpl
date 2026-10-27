@@ -96,8 +96,8 @@ capabilities:
 {{- if not (has .Values.edition (list "self-hosted" "hosted")) -}}
 {{- fail "edition must be self-hosted or hosted" -}}
 {{- end -}}
-{{- if and (eq .Values.edition "hosted") (or .Values.runner.enabled .Values.secrets.bootstrap.enabled) -}}
-{{- fail "edition=hosted requires runner.enabled=false and secrets.bootstrap.enabled=false" -}}
+{{- if and (eq .Values.edition "hosted") .Values.secrets.bootstrap.enabled -}}
+{{- fail "edition=hosted requires secrets.bootstrap.enabled=false" -}}
 {{- end -}}
 {{- if and .Values.githubApp.existingSecret (ne .Values.edition "hosted") -}}
 {{- fail "githubApp is only supported with edition=hosted" -}}
