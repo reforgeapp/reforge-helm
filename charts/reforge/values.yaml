@@ -111,6 +111,7 @@ runner:
       python: ghcr.io/reforgeapp/reforge-workspace-python@sha256:8088402b4b0b374fe2fd1e2fe0174dddcbf4140616ef5f5b25faa8d0ea8728af
 control:
   binary: /app/reforge
+  extraEnv: []
   resources:
     requests:
       cpu: 100m

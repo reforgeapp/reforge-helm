@@ -140,6 +140,9 @@ spec:
             - name: REFORGE_BUILTIN_RUNNER_DIR
               value: /builtin
             {{- end }}
+            {{- with .Values.control.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
             {{- with .Values.githubApp }}
             {{- if .existingSecret }}
             - name: REFORGE_GITHUB_APP_ID
