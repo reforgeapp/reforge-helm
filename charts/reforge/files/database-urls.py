@@ -19,5 +19,10 @@ for role, directory, variable in [
     name = quote(os.environ["DATABASE_NAME"], safe="")
     url = f"postgresql://{user}:{password}@{host}:{os.environ['DATABASE_PORT']}/{name}?{urlencode(query)}"
     path = Path(directory) / ("runtime.env" if role == "RUNTIME" else "migration.env")
-    path.write_text(variable + "=" + shlex.quote(url) + "\n")
+    lines = variable + "=" + shlex.quote(url) + "\n"
+    if role == "RUNTIME" and os.environ.get("STAFF_PASSWORD"):
+        staff = quote(os.environ["STAFF_USER"], safe="")
+        secret = quote(os.environ["STAFF_PASSWORD"], safe="")
+        lines += "REFORGE_STAFF_DATABASE_URL=" + shlex.quote(f"postgresql://{staff}:{secret}@{host}:{os.environ['DATABASE_PORT']}/{name}?{urlencode(query)}") + "\n"
+    path.write_text(lines)
     path.chmod(0o640)

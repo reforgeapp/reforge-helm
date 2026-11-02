@@ -19,6 +19,9 @@ helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | quote }}
 {{- define "reforge.databaseSecret" -}}
 {{ default (printf "%s-database" (include "reforge.fullname" .)) .Values.postgresql.existingSecret }}
 {{- end -}}
+{{- define "reforge.staffSecret" -}}
+{{ printf "%s-staff-database" (include "reforge.fullname" .) }}
+{{- end -}}
 {{- define "reforge.authentikSecret" -}}
 {{ default (printf "%s-authentik" (include "reforge.fullname" .)) .Values.authentik.existingSecret }}
 {{- end -}}

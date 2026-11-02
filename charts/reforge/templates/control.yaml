@@ -106,6 +106,9 @@ spec:
             - |
               . /database/runtime.env
               export REFORGE_DATABASE_URL
+              {{- if .Values.staffDatabaseRole.enabled }}
+              export REFORGE_STAFF_DATABASE_URL
+              {{- end }}
               exec {{ .Values.control.binary }}
           ports:
             - name: http

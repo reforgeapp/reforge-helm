@@ -71,6 +71,7 @@ class KubernetesAPI:
 REQUIRED_KEYS = {
     "app": ("encryption-key", "bootstrap-token", "bootstrap-expires-at"),
     "database": ("admin-password", "migrator-password", "runtime-password"),
+    "staff": ("password",),
     "authentik": ("secret-key", "bootstrap-password", "database-password", "client-secret"),
 }
 
@@ -99,7 +100,7 @@ def generate_values(kind, ttl_hours, now):
             "bootstrap-token": secrets.token_hex(32),
             "bootstrap-expires-at": expiry.isoformat(timespec="seconds").replace("+00:00", "Z"),
         }
-    if kind == "database":
+    if kind in ("database", "staff"):
         return {key: secrets.token_hex(32) for key in REQUIRED_KEYS[kind]}
     if kind == "authentik":
         return {

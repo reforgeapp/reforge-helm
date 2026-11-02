@@ -1,5 +1,6 @@
 \getenv migrator_password REFORGE_MIGRATOR_PASSWORD
 \getenv runtime_password REFORGE_RUNTIME_PASSWORD
+\getenv staff_password REFORGE_STAFF_PASSWORD
 \getenv migrator_url REFORGE_MIGRATION_DATABASE_URL
 \getenv runtime_url REFORGE_DATABASE_URL
 \getenv database_name PGDATABASE
@@ -32,7 +33,7 @@ BEGIN
     IF EXISTS (
         SELECT 1 FROM pg_auth_members m
         JOIN pg_roles r ON r.oid = m.member
-        WHERE r.rolname IN ('reforge_migrator', 'reforge_runtime')
+        WHERE r.rolname IN ('reforge_migrator', 'reforge_runtime', 'reforge_staff')
     ) THEN
         RAISE EXCEPTION 'migration and runtime roles must not inherit other roles; review existing memberships explicitly';
     END IF;
@@ -49,6 +50,15 @@ WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'reforge_runtime')
 \gexec
 SELECT format('ALTER ROLE %I WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD %L', 'reforge_runtime', :'runtime_password')
 WHERE EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'reforge_runtime')
+\gexec
+SELECT format('CREATE ROLE %I WITH NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS', 'reforge_staff')
+WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'reforge_staff')
+\gexec
+SELECT CASE
+    WHEN :'staff_password' = ''
+    THEN format('ALTER ROLE %I WITH NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD NULL', 'reforge_staff')
+    ELSE format('ALTER ROLE %I WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD %L', 'reforge_staff', :'staff_password')
+END
 \gexec
 SELECT format('ALTER DATABASE %I OWNER TO reforge_migrator', :'database_name')
 WHERE EXISTS (

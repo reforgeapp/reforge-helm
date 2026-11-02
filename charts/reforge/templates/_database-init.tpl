@@ -27,6 +27,15 @@
         secretKeyRef:
           name: {{ include "reforge.databaseSecret" . }}
           key: migrator-password
+    {{- if and .Values.postgresql.enabled .Values.staffDatabaseRole.enabled }}
+    - name: STAFF_USER
+      value: reforge_staff
+    - name: STAFF_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: {{ include "reforge.staffSecret" . }}
+          key: password
+    {{- end }}
   securityContext:
     runAsUser: 10001
     {{- include "reforge.securityContext" . | nindent 4 }}
@@ -85,6 +94,15 @@
         secretKeyRef:
           name: {{ include "reforge.databaseSecret" . }}
           key: runtime-password
+    - name: REFORGE_STAFF_PASSWORD
+    {{- if .Values.staffDatabaseRole.enabled }}
+      valueFrom:
+        secretKeyRef:
+          name: {{ include "reforge.staffSecret" . }}
+          key: password
+    {{- else }}
+      value: ""
+    {{- end }}
     - name: REFORGE_MIGRATION_DATABASE_URL
       value: unused
     - name: REFORGE_DATABASE_URL

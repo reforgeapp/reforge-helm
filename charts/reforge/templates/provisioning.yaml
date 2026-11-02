@@ -5,6 +5,9 @@
 {{- if and .Values.postgresql.enabled (not .Values.postgresql.existingSecret) -}}
 {{- $secrets = append $secrets (dict "name" (include "reforge.databaseSecret" .) "kind" "database") -}}
 {{- end -}}
+{{- if and .Values.postgresql.enabled .Values.staffDatabaseRole.enabled -}}
+{{- $secrets = append $secrets (dict "name" (include "reforge.staffSecret" .) "kind" "staff") -}}
+{{- end -}}
 {{- if and .Values.authentik.enabled (not .Values.authentik.existingSecret) -}}
 {{- $secrets = append $secrets (dict "name" (include "reforge.authentikSecret" .) "kind" "authentik") -}}
 {{- end -}}
